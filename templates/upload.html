@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <title>AION License Counter</title>
     <style>
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #121212;
@@ -24,6 +32,7 @@
             width: 100%;
             text-align: center;
             padding: 20px;
+            transition: all 0.3s ease;
         }
         h1 {
             margin: 20px 0 10px;
@@ -75,6 +84,9 @@
             background-color: #555;
             cursor: not-allowed;
         }
+        .shake {
+            animation: shake 0.5s;
+        }
         .logo {
             max-width: 100px;
             margin-bottom: 20px;
@@ -82,11 +94,11 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="container">
         <img src="{{ url_for('static', filename='images/AION_logo.png') }}" alt="Logo" class="logo">
         <h1>AION Microsoft License Count</h1>
-        <p>Upload CSV file export from Azure to generate an Excel report of the number of Microsoft licenses in use.</p>
-        <p>Only CSV upload accepted.</p>
+        <p>Upload CSV file export from Azure to generate a report of the number of Microsoft licenses in use.</p>
+        <p>Only CSV files are allowed.</p>
         <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
             <div class="file-drop-area" id="file-drop-area">
                 <p>Drag and drop your file here or click to upload</p>
@@ -105,6 +117,7 @@
         const errorMessageDisplay = document.getElementById('error-message');
         const uploadForm = document.getElementById('upload-form');
         const uploadButton = document.getElementById('upload-button');
+        const container = document.getElementById('container');
 
         fileDropArea.addEventListener('click', () => fileInput.click());
 
@@ -136,6 +149,7 @@
             if (!fileInput.files.length || !allowedFile(fileInput.files[0])) {
                 event.preventDefault();
                 showErrorMessage('Please select a valid CSV file before uploading.');
+                triggerShakeAnimation();
             }
         });
 
@@ -149,6 +163,7 @@
                 showFileName('');
                 showErrorMessage('Incorrect file type. Please upload a CSV file.');
                 uploadButton.disabled = true;
+                triggerShakeAnimation();
             }
         }
 
@@ -157,7 +172,7 @@
         }
 
         function showFileName(name) {
-            fileNameDisplay.textContent = `${name}`;
+            fileNameDisplay.textContent = `Selected file: ${name}`;
         }
 
         function showErrorMessage(message) {
@@ -166,6 +181,13 @@
 
         function hideErrorMessage() {
             errorMessageDisplay.textContent = '';
+        }
+
+        function triggerShakeAnimation() {
+            container.classList.add('shake');
+            setTimeout(() => {
+                container.classList.remove('shake');
+            }, 500);
         }
     </script>
 </body>
