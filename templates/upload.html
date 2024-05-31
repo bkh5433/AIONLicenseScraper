@@ -68,6 +68,9 @@
         .error-message {
             color: #ff6666;
         }
+        .success-message {
+            color: #3fff3f;
+        }
         .upload-button {
             background-color: #007bff;
             color: #ffffff;
@@ -172,10 +175,14 @@
         }
 
         function showFileName(name) {
-            fileNameDisplay.textContent = `Selected file: ${name}`;
+            fileNameDisplay.textContent = `${name}`;
         }
 
         function showErrorMessage(message) {
+            errorMessageDisplay.textContent = message;
+        }
+
+        function showSuccessMesaage(message) {
             errorMessageDisplay.textContent = message;
         }
 

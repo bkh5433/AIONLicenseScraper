@@ -1,10 +1,8 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-import pandas as pd
+from flask import render_template, request, redirect, url_for, send_from_directory, jsonify
 import os
-from datetime import datetime
 from csv_parser import process_file
 from create_app import app
-
+from validation import validate_csv
 
 
 def allowed_file(filename):
@@ -26,6 +24,9 @@ def upload_file():
     if file and allowed_file(file.filename):
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(file_path)
+        is_valid, error_message = validate_csv(file_path)
+        if not is_valid:
+            return jsonify({'error': error_message}), 400
         result_path = process_file(file_path)
         return redirect(url_for('download_file', filename=os.path.basename(result_path)))
     return redirect(request.url)
@@ -42,4 +43,3 @@ def download_file(filename):
 if __name__ == '__main__':
     # app.run(debug=True)
     app.run(host='0.0.0.0', port=8000)
-
