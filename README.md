@@ -49,7 +49,7 @@ AION Microsoft License Counter is a web application that allows users to upload 
 1. **Make the `run_gunicorn.sh` script executable:**
 
     ```sh
-    chmod +x run_gunicorn.sh
+    chmod +x run_gunicorn.txt
     ```
 
 ## Usage
@@ -57,7 +57,7 @@ AION Microsoft License Counter is a web application that allows users to upload 
 1. **Run the application with Gunicorn:**
 
     ```sh
-    ./run_gunicorn.sh
+    ./run_gunicorn.txt
     ```
 
 2. **Access the application:**
