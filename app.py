@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, send_from_directory, jsonify
+from flask import render_template, request, redirect, url_for, send_from_directory
 from csv_parser import process_file
 from create_app import app
 from validation import validate_csv
@@ -76,8 +76,8 @@ def download_file(filename):
         os.remove(file_path)  # Remove the file after download
         return response
     except Exception as e:
-        logger.exception("An error occurred during file download")
-        return render_template('error.html', error_message="An error occurred while trying to download the file.")
+        logger.exception(f"An error occurred during file download\n {e}")
+        return render_template('error.html', error_message=f"An error occurred while trying to download the file.\n {e}")
 
 
 if __name__ == '__main__':
