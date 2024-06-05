@@ -7,8 +7,9 @@ services:
       dockerfile: Dockerfile
     volumes:
       - .:/app
+      - ./logs:/app/logs
     expose:
-      - "8000"
+      - "5000"
     environment:
       FLASK_ENV: development
 
@@ -17,7 +18,8 @@ services:
       context: .
       dockerfile: Dockerfile.nginx
     ports:
-      - "8000:80"
+      - "80:80"
+      - "443:443"
     depends_on:
       - web
     volumes:
