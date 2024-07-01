@@ -39,6 +39,8 @@ def upload_file():
             return redirect(request.url)
 
         file = request.files['file']
+        cost_per_user = request.form.get('cost_per_user', 115)
+        cost_per_exchange = request.form.get('cost_per_exchange', 20)
 
         if file.filename == '':
             logger.warning("No selected file")
@@ -56,7 +58,7 @@ def upload_file():
                 logger.error(f"File validation failed: {file.filename} - {error_message}")
                 return render_template('error.html', error_message=error_message)
 
-            result_path = process_file(file_path)
+            result_path = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
             logger.info(f"File processed successfully: {file.filename}")
             return redirect(url_for('download_file', filename=os.path.basename(result_path)))
 

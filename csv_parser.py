@@ -86,7 +86,8 @@ def create_license_counts_df(license_counts):
         return None
 
 
-def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, other_properties_df):
+def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, other_properties_df,
+                  cost_per_user, cost_per_exchange):
     """Save the processed data to an Excel file with specific formatting."""
     try:
         with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
@@ -98,7 +99,9 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
             workbook = writer.book
             header_format = workbook.add_format(
                 {'bold': True, 'text_wrap': True, 'valign': 'top', 'fg_color': '#D7E4BC', 'border': 1})
-            total_format = workbook.add_format({'bold': True, 'fg_color': '#FFEB9C', 'border': 1})
+            total_format = workbook.add_format({'bold': True, 'fg_color': '#FFEB9C', 'border': 1,
+                                                'num_format': '#,##0.00'})
+            currency_format = workbook.add_format({'num_format': '$#,##0.00'})
 
             def format_sheet(worksheet, df, is_totals=False):
                 for col_num, value in enumerate(df.columns.values):
@@ -118,10 +121,24 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
 
             license_counts_worksheet = writer.sheets['License Counts']
             format_sheet(license_counts_worksheet, license_counts_df, is_totals=True)
+
             for col_num in range(len(license_counts_df.columns)):
                 license_counts_worksheet.write(len(license_counts_df), col_num + 1, license_counts_df.iloc[-1, col_num],
                                                total_format)
             license_counts_worksheet.write(len(license_counts_df), 0, 'Total', total_format)
+
+            # Set currency format for cost columns
+            user_cost_col = 'Cost of Users (${})'.format(cost_per_user)
+            exchange_cost_col = 'Cost of Exchange Licenses (${})'.format(cost_per_exchange)
+            billable_total_col = 'Billable Total'
+
+            user_cost_idx = license_counts_df.columns.get_loc(user_cost_col) + 1
+            exchange_cost_idx = license_counts_df.columns.get_loc(exchange_cost_col) + 1
+            billable_total_idx = license_counts_df.columns.get_loc(billable_total_col) + 1
+
+            license_counts_worksheet.set_column(user_cost_idx, user_cost_idx, 15, currency_format)
+            license_counts_worksheet.set_column(exchange_cost_idx, exchange_cost_idx, 15, currency_format)
+            license_counts_worksheet.set_column(billable_total_idx, billable_total_idx, 15, currency_format)
 
             aion_management_worksheet = writer.sheets['AION Management']
             format_sheet(aion_management_worksheet, aion_management_df)
@@ -129,7 +146,7 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
             aion_partners_worksheet = writer.sheets['AION Partners']
             format_sheet(aion_partners_worksheet, aion_partners_df)
 
-            other_properties_worksheet = writer.sheets['Other Properties']
+            other_properties_worksheet = writer.sheets['Properties']
             format_sheet(other_properties_worksheet, other_properties_df)
         logger.info(f"Data saved to Excel file: {excel_path}")
     except PermissionError:
@@ -138,7 +155,7 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
         logger.error(f"Error writing to Excel file {excel_path}: {e}")
 
 
-def process_file(file_path):
+def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     df = read_and_prepare_data(file_path)
     if df is None:
         return None
@@ -157,6 +174,12 @@ def process_file(file_path):
     if license_counts_df is None:
         return None
 
+    license_counts_df['Cost of Users (${})'.format(cost_per_user)] = license_counts_df['365 Premium'] * cost_per_user
+    license_counts_df['Cost of Exchange Licenses (${})'.format(cost_per_exchange)] = license_counts_df[
+                                                                                         'Exchange'] * cost_per_exchange
+    license_counts_df['Billable Total'] = license_counts_df['Cost of Users (${})'.format(cost_per_user)] + \
+                                          license_counts_df['Cost of Exchange Licenses (${})'.format(cost_per_exchange)]
+
     aion_management_df = pd.DataFrame(aion_management, columns=['Display Name', 'License Type', 'User Principal Name'])
     aion_partners_df = pd.DataFrame(aion_partners, columns=['Display Name', 'License Type', 'User Principal Name'])
     other_properties_df = pd.DataFrame(other_properties,
@@ -165,7 +188,9 @@ def process_file(file_path):
     current_date = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     excel_path = os.path.join(app.config['OUTPUT_FOLDER'], f"license_counts_{current_date}.xlsx")
 
-    save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, other_properties_df)
+    save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, other_properties_df,
+                  cost_per_user,
+                  cost_per_exchange)
 
     try:
         os.remove(file_path)

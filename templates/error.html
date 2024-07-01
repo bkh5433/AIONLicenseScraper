@@ -3,10 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <title>Error</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.7.14/lottie.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background-color: #1e1e1e;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            padding: 40px;
+            transition: all 0.3s ease;
+        }
+
+        #lottie-container {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 20px;
+        }
+
+        h1 {
+            color: #ff6666;
+            margin-bottom: 20px;
+        }
+
+        p {
+            color: #cccccc;
+            margin-bottom: 30px;
+        }
+
+        .back-button {
+            background-color: #007bff;
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .back-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
 </head>
 <body>
-    <h1>you uploaded a csv just not the right one...</h1>
+<div class="container">
+    <div id="lottie-container"></div>
+    <h1>Oops! Wrong CSV </h1>
+    <p>It seems that the CSV you uploaded is not the one we are looking for.</p>
     <p>{{ error_message }}</p>
-    <a href="{{ url_for('index') }}">Go back</a>
+    <a href="{{ url_for('index') }}" class="back-button">Let's try again</a>
+</div>
+<script>
+        var animation = lottie.loadAnimation({
+            container: document.getElementById('lottie-container'),
+            renderer: 'svg',
+            loop: false,
+            autoplay: true,
+            path: 'https://lottie.host/e46ce4b1-a341-432f-ad3f-70c50ebc9fd0/8ZtkkE9M1d.json'
+        });
+</script>
 </body>
 </html>
