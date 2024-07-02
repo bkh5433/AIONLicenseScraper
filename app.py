@@ -1,5 +1,5 @@
 from flask import render_template, request, redirect, url_for, send_from_directory
-from csv_parser import process_file
+from csv_parser import process_file, generate_summary
 from create_app import app
 from utils.validation import validate_csv
 from utils.logger import setup_logging, get_logger
@@ -80,7 +80,7 @@ def upload_file():
 
             result_path = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
             logger.info(f"File processed successfully: {file.filename}")
-            return redirect(url_for('download_file', filename=os.path.basename(result_path)))
+            return redirect(url_for('show_summary', filename=os.path.basename(result_path)))
 
         logger.warning(f"File extension not allowed: {file.filename}")
         return redirect(request.url)
@@ -111,6 +111,20 @@ def download_file(filename):
         logger.exception(f"An error occurred during file download\n {e}")
         return render_template('error.html',
                                error_message=f"An error occurred while trying to download the file.\n {e}")
+
+
+@app.route('/summary/<filename>')
+def show_summary(filename):
+    logger.info(f"Generating summary for {filename}")
+    try:
+        file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
+        summary_data = generate_summary(file_path)
+        return render_template('summary.html', summary=summary_data, filename=filename)
+    except Exception as e:
+        logger.exception("Error Generating Summary")
+        return render_template('error.html',
+                               error_title="An error occurred while generating the summary.",
+                               error_message=str(e))
 
 
 if __name__ == '__main__':

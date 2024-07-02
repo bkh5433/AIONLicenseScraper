@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import openpyxl
 from datetime import datetime
 from utils.logger import get_logger
 from create_app import app
@@ -201,3 +202,24 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
         logger.error(f"Error removing file {file_path}: {e}")
 
     return excel_path
+
+
+def generate_summary(file_path):
+    workbook = openpyxl.load_workbook(file_path)
+    sheet = workbook['License Counts']
+
+    total_row = sheet.max_row
+    summary = {
+        'total_365_premium': sheet.cell(row=total_row, column=sheet.max_column - 4).value,
+        'total_exchange': sheet.cell(row=total_row, column=sheet.max_column - 3).value,
+        'total_cost': sheet.cell(row=total_row, column=sheet.max_column).value,
+        'top_offices': []
+    }
+
+    # Get top 5 offices by total cost
+    office_data = [(sheet.cell(row=i, column=1).value, sheet.cell(row=i, column=sheet.max_column).value)
+                   for i in range(2, total_row)]
+    office_data.sort(key=lambda x: x[1], reverse=True)
+    summary['top_offices'] = office_data[:5]
+
+    return summary
