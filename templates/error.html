@@ -64,8 +64,8 @@
 <body>
 <div class="container">
     <div id="lottie-container"></div>
-    <h1>Oops! Wrong CSV </h1>
-    <p>It seems that the CSV you uploaded is not the one we are looking for.</p>
+    <h1>Oops! An Error Occurred </h1>
+    <p>{{ error_title|default('It seems something went wrong') }}</p>
     <p>{{ error_message }}</p>
     <a href="{{ url_for('index') }}" class="back-button">Let's try again</a>
 </div>

@@ -1,14 +1,13 @@
 from flask import render_template, request, redirect, url_for, send_from_directory
 from csv_parser import process_file
 from create_app import app
-from validation import validate_csv
+from utils.validation import validate_csv
+from utils.logger import setup_logging, get_logger
 import os
-import logging
 import json
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
-                    filename='/app/logs/app.log', encoding='utf-8')
-logger = logging.getLogger(__name__)
+setup_logging()
+logger = get_logger(__name__)
 
 
 def get_version_info():
@@ -51,7 +50,9 @@ def upload_file():
     try:
         if 'file' not in request.files:
             logger.warning("No file part in the request")
-            return redirect(request.url)
+            return render_template('error.html',
+                                   error_title='No File Uploaded',
+                                   error_message="No file part in the request")
 
         file = request.files['file']
         cost_per_user = request.form.get('cost_per_user', 115)
@@ -59,7 +60,9 @@ def upload_file():
 
         if file.filename == '':
             logger.warning("No selected file")
-            return redirect(request.url)
+            return render_template('error.html',
+                                   error_title='No File Selected',
+                                   error_message="Please choose a file before uploading.")
 
         if file and allowed_file(file.filename):
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
@@ -71,7 +74,9 @@ def upload_file():
                 invalid_path = os.path.join(app.config['INVALID_FOLDER'], file.filename)
                 os.rename(file_path, invalid_path)
                 logger.error(f"File validation failed: {file.filename} - {error_message}")
-                return render_template('error.html', error_message=error_message)
+                return render_template('error.html',
+                                       error_title='Invalid CSV File',
+                                       error_message=error_message)
 
             result_path = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
             logger.info(f"File processed successfully: {file.filename}")
@@ -81,7 +86,9 @@ def upload_file():
         return redirect(request.url)
     except Exception as e:
         logger.exception("An error occurred during file upload")
-        return render_template('error.html', error_message=f"An unexpected error occurred. Please try again.\n {e}")
+        return render_template('error.html',
+                               error_title=f"An unexpected error occurred. Please try again.",
+                               error_message=str(e))
 
 
 @app.route('/download/<filename>')

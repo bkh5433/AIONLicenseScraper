@@ -1,10 +1,10 @@
 import pandas as pd
 import os
 from datetime import datetime
-import logging
+from utils.logger import get_logger
 from create_app import app
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def read_and_prepare_data(file_path):
@@ -51,14 +51,12 @@ def process_licenses(df, target_licenses, license_counts):
             continue
 
         licenses_list = licenses.split('+')
-        has_target_license = False
 
         for license in licenses_list:
             license = license.strip()
 
             for key, variants in target_licenses.items():
                 if any(variant in license for variant in variants):
-                    has_target_license = True
                     license_counts[office if not (pd.isna(office) or office.strip() == '') else 'Unaccounted'][key] += 1
                     if office == 'AION Management':
                         aion_management.append([display_name, license, user_principal_name])
