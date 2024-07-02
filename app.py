@@ -4,10 +4,24 @@ from create_app import app
 from validation import validate_csv
 import os
 import logging
+import json
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     filename='/app/logs/app.log', encoding='utf-8')
 logger = logging.getLogger(__name__)
+
+
+def get_version_info():
+    try:
+        with open('version.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"version": "unknown", "commit": "unknown", "date": "unknown"}
+
+
+@app.context_processor
+def inject_version():
+    return dict(version_info=get_version_info())
 
 
 def allowed_file(filename):
@@ -28,6 +42,7 @@ def log_request_end(response):
 @app.route('/')
 def index():
     logger.info("Rendering upload page")
+    logger.info(f"App version: {get_version_info()}")
     return render_template('upload.html')
 
 
@@ -66,7 +81,7 @@ def upload_file():
         return redirect(request.url)
     except Exception as e:
         logger.exception("An error occurred during file upload")
-        return render_template('error.html', error_message="An unexpected error occurred. Please try again.")
+        return render_template('error.html', error_message=f"An unexpected error occurred. Please try again.\n {e}")
 
 
 @app.route('/download/<filename>')
@@ -74,12 +89,21 @@ def download_file(filename):
     try:
         file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
         response = send_from_directory(app.config['OUTPUT_FOLDER'], filename, as_attachment=True)
-        logger.info(f"File downloaded: {filename}")
-        os.remove(file_path)  # Remove the file after download
+        if response.status_code == 200:
+            logger.info(f"File downloaded: {filename}")
+        else:
+            logger.error(f"Error downloading file: {filename}")
+            logger.error(response)
+        try:
+            os.remove(file_path)  # Remove the file after download
+            logger.info(f"Removed downloaded file: {filename}")
+        except OSError as e:
+            logger.error(f"Error removing file {filename}: {e}")
         return response
     except Exception as e:
         logger.exception(f"An error occurred during file download\n {e}")
-        return render_template('error.html', error_message=f"An error occurred while trying to download the file.\n {e}")
+        return render_template('error.html',
+                               error_message=f"An error occurred while trying to download the file.\n {e}")
 
 
 if __name__ == '__main__':

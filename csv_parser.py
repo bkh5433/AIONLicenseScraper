@@ -39,7 +39,7 @@ def process_licenses(df, target_licenses, license_counts):
     unaccounted_log = []
     aion_management = []
     aion_partners = []
-    other_properties = []
+    properties = []
 
     for index, row in df.iterrows():
         office = row.get('Office')
@@ -64,13 +64,13 @@ def process_licenses(df, target_licenses, license_counts):
                     elif office == 'AION Partners':
                         aion_partners.append([row['Display name'], license, user_principal_name])
                     else:
-                        other_properties.append([row['Display name'], license, user_principal_name, office])
+                        properties.append([row['Display name'], license, user_principal_name, office])
 
         if (pd.isna(office) or office.strip() == '') and has_target_license:
             unaccounted_log.append(f"{row['Display name']} ({user_principal_name})")
 
     logger.info("Processed licenses")
-    return license_counts, unaccounted_log, aion_management, aion_partners, other_properties
+    return license_counts, unaccounted_log, aion_management, aion_partners, properties
 
 
 def create_license_counts_df(license_counts):
@@ -86,7 +86,7 @@ def create_license_counts_df(license_counts):
         return None
 
 
-def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, other_properties_df,
+def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df,
                   cost_per_user, cost_per_exchange):
     """Save the processed data to an Excel file with specific formatting."""
     try:
@@ -94,14 +94,14 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
             license_counts_df.to_excel(writer, sheet_name='License Counts')
             aion_management_df.to_excel(writer, sheet_name='AION Management', index=False)
             aion_partners_df.to_excel(writer, sheet_name='AION Partners', index=False)
-            other_properties_df.to_excel(writer, sheet_name='Other Properties', index=False)
+            properties_df.to_excel(writer, sheet_name='Properties', index=False)
 
             workbook = writer.book
             header_format = workbook.add_format(
                 {'bold': True, 'text_wrap': True, 'valign': 'top', 'fg_color': '#D7E4BC', 'border': 1})
             total_format = workbook.add_format({'bold': True, 'fg_color': '#FFEB9C', 'border': 1,
-                                                'num_format': '#,##0.00'})
-            currency_format = workbook.add_format({'num_format': '$#,##0.00'})
+                                                'num_format': '#,##0'})
+            currency_format = workbook.add_format({'num_format': '$#,##0'})
 
             def format_sheet(worksheet, df, is_totals=False):
                 for col_num, value in enumerate(df.columns.values):
@@ -146,8 +146,8 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
             aion_partners_worksheet = writer.sheets['AION Partners']
             format_sheet(aion_partners_worksheet, aion_partners_df)
 
-            other_properties_worksheet = writer.sheets['Properties']
-            format_sheet(other_properties_worksheet, other_properties_df)
+            properties_worksheet = writer.sheets['Properties']
+            format_sheet(properties_worksheet, properties_df)
         logger.info(f"Data saved to Excel file: {excel_path}")
     except PermissionError:
         logger.error(f"Permission denied when writing to {excel_path}")
@@ -166,7 +166,7 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     }
 
     license_counts = initialize_license_counts(df, target_licenses)
-    license_counts, unaccounted_log, aion_management, aion_partners, other_properties = process_licenses(df,
+    license_counts, unaccounted_log, aion_management, aion_partners, properties = process_licenses(df,
                                                                                                          target_licenses,
                                                                                                          license_counts)
 
@@ -182,13 +182,13 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
 
     aion_management_df = pd.DataFrame(aion_management, columns=['Display Name', 'License Type', 'User Principal Name'])
     aion_partners_df = pd.DataFrame(aion_partners, columns=['Display Name', 'License Type', 'User Principal Name'])
-    other_properties_df = pd.DataFrame(other_properties,
+    properties_df = pd.DataFrame(properties,
                                        columns=['Display Name', 'License Type', 'User Principal Name', 'Office'])
 
     current_date = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     excel_path = os.path.join(app.config['OUTPUT_FOLDER'], f"license_counts_{current_date}.xlsx")
 
-    save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, other_properties_df,
+    save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df,
                   cost_per_user,
                   cost_per_exchange)
 
