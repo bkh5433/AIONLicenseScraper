@@ -36,7 +36,7 @@ def initialize_license_counts(df, target_licenses):
 
 def process_licenses(df, target_licenses, license_counts):
     """Process each row in the DataFrame to count licenses and log specific organizations."""
-    unaccounted_log = []
+    unaccounted_users = []
     aion_management = []
     aion_partners = []
     properties = []
@@ -45,6 +45,7 @@ def process_licenses(df, target_licenses, license_counts):
         office = row.get('Office')
         licenses = row.get('Licenses')
         user_principal_name = row.get('User principal name')
+        display_name = row.get('Display name')
 
         if pd.isna(licenses) or licenses.strip() == '':
             continue
@@ -60,17 +61,15 @@ def process_licenses(df, target_licenses, license_counts):
                     has_target_license = True
                     license_counts[office if not (pd.isna(office) or office.strip() == '') else 'Unaccounted'][key] += 1
                     if office == 'AION Management':
-                        aion_management.append([row['Display name'], license, user_principal_name])
+                        aion_management.append([display_name, license, user_principal_name])
                     elif office == 'AION Partners':
-                        aion_partners.append([row['Display name'], license, user_principal_name])
+                        aion_partners.append([display_name, license, user_principal_name])
+                    elif pd.isna(office) or office.strip() == '':
+                        unaccounted_users.append([display_name, license, user_principal_name])
                     else:
-                        properties.append([row['Display name'], license, user_principal_name, office])
+                        properties.append([display_name, license, user_principal_name, office])
 
-        if (pd.isna(office) or office.strip() == '') and has_target_license:
-            unaccounted_log.append(f"{row['Display name']} ({user_principal_name})")
-
-    logger.info("Processed licenses")
-    return license_counts, unaccounted_log, aion_management, aion_partners, properties
+    return license_counts, unaccounted_users, aion_management, aion_partners, properties
 
 
 def create_license_counts_df(license_counts):
@@ -86,7 +85,7 @@ def create_license_counts_df(license_counts):
         return None
 
 
-def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df,
+def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df, unaccounted_users,
                   cost_per_user, cost_per_exchange):
     """Save the processed data to an Excel file with specific formatting."""
     try:
@@ -95,6 +94,7 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
             aion_management_df.to_excel(writer, sheet_name='AION Management', index=False)
             aion_partners_df.to_excel(writer, sheet_name='AION Partners', index=False)
             properties_df.to_excel(writer, sheet_name='Properties', index=False)
+            unaccounted_users.to_excel(writer, sheet_name='Unaccounted Users', index=False)
 
             workbook = writer.book
             header_format = workbook.add_format(
@@ -148,6 +148,9 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
 
             properties_worksheet = writer.sheets['Properties']
             format_sheet(properties_worksheet, properties_df)
+
+            unaccounted_users_worksheet = writer.sheets['Unaccounted Users']
+            format_sheet(unaccounted_users_worksheet, unaccounted_users)
         logger.info(f"Data saved to Excel file: {excel_path}")
     except PermissionError:
         logger.error(f"Permission denied when writing to {excel_path}")
@@ -166,9 +169,9 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     }
 
     license_counts = initialize_license_counts(df, target_licenses)
-    license_counts, unaccounted_log, aion_management, aion_partners, properties = process_licenses(df,
-                                                                                                         target_licenses,
-                                                                                                         license_counts)
+    license_counts, unaccounted_users, aion_management, aion_partners, properties = process_licenses(df,
+                                                                                                     target_licenses,
+                                                                                                     license_counts)
 
     license_counts_df = create_license_counts_df(license_counts)
     if license_counts_df is None:
@@ -183,12 +186,13 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     aion_management_df = pd.DataFrame(aion_management, columns=['Display Name', 'License Type', 'User Principal Name'])
     aion_partners_df = pd.DataFrame(aion_partners, columns=['Display Name', 'License Type', 'User Principal Name'])
     properties_df = pd.DataFrame(properties,
-                                       columns=['Display Name', 'License Type', 'User Principal Name', 'Office'])
+                                 columns=['Display Name', 'License Type', 'User Principal Name', 'Office'])
+    unaccounted_users = pd.DataFrame(unaccounted_users, columns=['Display Name', 'License Type', 'User Principal Name'])
 
     current_date = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     excel_path = os.path.join(app.config['OUTPUT_FOLDER'], f"license_counts_{current_date}.xlsx")
 
-    save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df,
+    save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df, unaccounted_users,
                   cost_per_user,
                   cost_per_exchange)
 
