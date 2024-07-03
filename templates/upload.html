@@ -115,48 +115,81 @@
             color: #ff6666;
         }
 
-        .upload-button {
-            background-color: #ff8c00;
+        .upload-button, .reset-button {
+            background-color: #007bff;
             color: #ffffff;
             border: none;
             padding: 10px 20px;
             border-radius: 5px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease;
             display: inline-block;
             width: auto;
             margin-top: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-button:hover, .reset-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .upload-button:active, .reset-button:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-button::after, .reset-button::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 5px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.5);
+            opacity: 0;
+            border-radius: 100%;
+            transform: scale(1, 1) translate(-50%);
+            transform-origin: 50% 50%;
+        }
+
+        .upload-button:hover::after, .reset-button:hover::after {
+            animation: ripple 1s ease-out;
+        }
+
+        @keyframes ripple {
+            0% {
+                transform: scale(0, 0);
+                opacity: 0.5;
+            }
+            20% {
+                transform: scale(25, 25);
+                opacity: 0.3;
+            }
+            100% {
+                opacity: 0;
+                transform: scale(40, 40);
+            }
         }
 
         .upload-button:hover {
-            background-color: #e67e00;
-        }
-
-        .upload-button:disabled {
-            background-color: #555;
-            cursor: not-allowed;
-        }
-
-        .reset-button {
-            background-color: #f44336;
-            color: #ffffff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-            display: inline-block;
-            width: auto;
-            margin-top: 10px;
+            background-color: #0056b3;
         }
 
         .reset-button:hover {
             background-color: #d32f2f;
         }
 
-        .reset-button:disabled {
+        .upload-button:disabled, .reset-button:disabled {
             background-color: #555;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .upload-button:disabled::after, .reset-button:disabled::after {
+            display: none;
         }
 
         .logo {
@@ -465,9 +498,9 @@
 
     function getFileAge(file) {
         const now = new Date();
-        let fileDate;
 
         // Try to get the file creation time
+        let fileDate;
         if ('getCreationTime' in file) {
             // This is a non-standard property, but it works in some browsers
             fileDate = new Date(file.getCreationTime());
@@ -480,24 +513,41 @@
         }
 
         const diffTime = Math.abs(now - fileDate);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return {age: diffDays, date: fileDate};
+        const diffMinutes = diffTime / (1000 * 60);
+        const diffHours = diffTime / (1000 * 60 * 60);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        return {
+            ageInMinutes: Math.floor(diffMinutes),
+            ageInDays: diffDays,
+            ageInHours: Math.floor(diffHours),
+            date: fileDate
+        };
+    }
+
+    function showModal() {
+        document.getElementById('ageConfirmModal').style.display = 'block';
     }
 
     function updateFileAge(file) {
+        const fileAge = getFileAge(file);
         const fileAgeDisplay = document.getElementById('file-age');
-        const {age, date} = getFileAge(file);
+        const {ageInMinutes, ageInDays, date} = getFileAge(file);
         const formattedDate = date.toLocaleString(); // Format the date for display
 
-        if (age === 0) {
-            fileAgeDisplay.textContent = `File is current (created today at ${formattedDate})`;
+        if (ageInDays === 0 || ageInMinutes < 60) {
+            fileAgeDisplay.textContent = `File is current (created ${fileAge.ageInMinutes} minutes ago)`;
+            fileAgeDisplay.style.color = '#4CAF50';
+        }
+        if (ageInDays === 0) {
+            fileAgeDisplay.textContent = `File is current (created ${fileAge.ageInHours} hours ago)`;
             fileAgeDisplay.style.color = '#4CAF50';
         } else {
-            fileAgeDisplay.textContent = `File is ${age} day(s) old (created on ${formattedDate})`;
-            if (age > 30) {
+            fileAgeDisplay.textContent = `File is ${ageInDays} day(s) old (created on ${formattedDate})`;
+            if (ageInDays > 30) {
                 fileAgeDisplay.style.color = '#FF0000';
                 fileAgeDisplay.textContent += ' - Warning: This file is more than 30 days old!';
-            } else if (age > 7) {
+            } else if (ageInDays > 7) {
                 fileAgeDisplay.style.color = '#FF9800';
             } else {
                 fileAgeDisplay.style.color = '#4CAF50';
@@ -515,14 +565,15 @@
     {% endwith %}
 </script>
 
-<div id="version-badge" class="version-badge">
-    <span class="version-info">v{{ version_info.version }}</span>
-    <div class="version-details">
-        <p>Branch: {{ version_info.branch }}</p>
-        <p>Built on: {{ version_info.date }}</p>
+<footer>
+    <div id="version-badge" class="version-badge">
+        <span class="version-info">v{{ version_info.version }}</span>
+        <div class="version-details">
+            <p>Branch: {{ version_info.branch }}</p>
+            <p>Built on: {{ version_info.date }}</p>
+        </div>
     </div>
-</div>
-
+</footer>
 
 </body>
 </html>
