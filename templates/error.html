@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Error</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.7.14/lottie.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -78,5 +79,6 @@
             path: 'https://lottie.host/e46ce4b1-a341-432f-ad3f-70c50ebc9fd0/8ZtkkE9M1d.json'
         });
 </script>
+{% include 'version_badge.html' %}
 </body>
 </html>
