@@ -13,8 +13,7 @@ RUN pip install -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-RUN chmod +x version.sh
-RUN ./version.sh
+RUN chmod +x version.sh && sh ./version.sh
 
 # env variables
 ENV FLASK_APP=app.py

@@ -38,7 +38,7 @@
 
         .container {
             background-color: #1e1e1e;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 8px rgba(255, 140, 0, 0.38);
             border-radius: 8px;
             max-width: 600px;
             width: 90%;
@@ -116,7 +116,7 @@
         }
 
         .upload-button {
-            background-color: #007bff;
+            background-color: #ff8c00;
             color: #ffffff;
             border: none;
             padding: 10px 20px;
@@ -129,7 +129,7 @@
         }
 
         .upload-button:hover {
-            background-color: #0056b3;
+            background-color: #e67e00;
         }
 
         .upload-button:disabled {
@@ -215,14 +215,14 @@
         }
 
         .form-group input[type="submit"] {
-            background-color: #007bff;
+            background-color: #ff8c00;
             border: none;
             color: #ffffff;
             cursor: pointer;
         }
 
         .form-group input[type="submit"]:hover {
-            background-color: #0056b3;
+            background-color: #e67e00;
         }
 
         .form-group input[type="submit"]:disabled {
@@ -248,12 +248,17 @@
             transition: all 0.3s ease;
             z-index: 1000;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            width: auto;
+            height: auto;
+            max-height: 20px;
         }
 
         .version-badge:hover {
             background-color: rgba(0, 0, 0, 0.8);
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            max-height: 100px;
         }
 
         .version-badge .version-info {
@@ -275,43 +280,10 @@
             margin-top: 5px;
         }
 
-        .version-badge {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            background-color: rgba(0, 0, 0, 0.6);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            transition: all 0.3s ease;
-            z-index: 1000;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-        }
-
-        .version-badge:hover {
-            background-color: rgba(0, 0, 0, 0.8);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        }
-
-        .version-badge .version-info {
-            display: inline-block;
-        }
-
-        .version-badge .version-details {
-            max-height: 0;
-            overflow: hidden;
-            opacity: 0;
-            transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
-            margin-top: 0;
-            font-size: 10px;
-        }
-
-        .version-badge:hover .version-details {
-            max-height: 100px;
-            opacity: 1;
-            margin-top: 5px;
+        .file-age {
+            margin-top: 10px;
+            font-style: italic;
+            font-size: 0.9em;
         }
     </style>
 </head>
@@ -326,6 +298,7 @@
             <p>Drag and drop your file here or click to upload</p>
             <input type="file" name="file" id="file-input" accept=".csv">
             <p class="file-name" id="file-name"></p>
+            <p class="file-age" id="file-age"></p>
             <p class="error-message" id="error-message"></p>
         </div>
         <div class="form-group">
@@ -426,12 +399,14 @@
             showFileName(file.name);
             hideErrorMessage();
             uploadButton.disabled = false;
+            updateFileAge(file);
         } else {
             fileInput.value = '';
             showFileName('');
             showErrorMessage('Incorrect file type. Please upload a CSV file.');
             uploadButton.disabled = true;
             triggerShakeAnimation();
+            document.getElementById('file-age').textContent = '';
         }
     }
 
@@ -465,6 +440,7 @@
     function resetToDefault() {
         document.getElementById('cost_per_user').value = defaultCostPerUser;
         document.getElementById('cost_per_exchange').value = defaultCostPerExchange;
+        document.getElementById('file-age').textContent = '';
         fileInput.value = '';  // Clear the uploaded file
         fileNameDisplay.textContent = '';  // Clear the file name display
         resetButton.disabled = true;
@@ -483,6 +459,26 @@
         }
     }
 
+    function getFileAge(file) {
+        const now = new Date();
+        const fileDate = new Date(file.lastModified);
+        const diffTime = Math.abs(now - fileDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays;
+    }
+
+    function updateFileAge(file) {
+        const fileAgeDisplay = document.getElementById('file-age');
+        const age = getFileAge(file);
+        if (age === 0) {
+            fileAgeDisplay.textContent = 'File is current (modified today)';
+            fileAgeDisplay.style.color = '#4CAF50';
+        } else {
+            fileAgeDisplay.textContent = `File is ${age} day(s) old`;
+            fileAgeDisplay.style.color = age > 7 ? '#FF9800' : '#4CAF50';
+        }
+    }
+
     // Display flashed messages using Toastr
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -496,7 +492,7 @@
 <div id="version-badge" class="version-badge">
     <span class="version-info">v{{ version_info.version }}</span>
     <div class="version-details">
-        <p>Commit: {{ version_info.commit }}</p>
+        <p>Branch: {{ version_info.branch }}</p>
         <p>Built on: {{ version_info.date }}</p>
     </div>
 </div>

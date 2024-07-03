@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import openpyxl
+import time
 from datetime import datetime
 from utils.logger import get_logger
 from create_app import app
@@ -158,6 +159,7 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
 
 
 def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
+    start_time = time.time()
     df = read_and_prepare_data(file_path)
     if df is None:
         return None
@@ -201,6 +203,10 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     except OSError as e:
         logger.error(f"Error removing file {file_path}: {e}")
 
+    end_time = time.time()
+    processing_time = end_time - start_time
+    logger.info(f"CSV processing time: {processing_time:.2f} seconds")
+
     return excel_path
 
 
@@ -209,17 +215,58 @@ def generate_summary(file_path):
     sheet = workbook['License Counts']
 
     total_row = sheet.max_row
-    summary = {
-        'total_365_premium': sheet.cell(row=total_row, column=sheet.max_column - 4).value,
-        'total_exchange': sheet.cell(row=total_row, column=sheet.max_column - 3).value,
-        'total_cost': sheet.cell(row=total_row, column=sheet.max_column).value,
-        'top_offices': []
-    }
+    data = [
+        [sheet.cell(row=i, column=j).value for j in range(1, sheet.max_column + 1)]
+        for i in range(2, total_row)  # Skip header row
+    ]
 
-    # Get top 5 offices by total cost
-    office_data = [(sheet.cell(row=i, column=1).value, sheet.cell(row=i, column=sheet.max_column).value)
-                   for i in range(2, total_row)]
-    office_data.sort(key=lambda x: x[1], reverse=True)
-    summary['top_offices'] = office_data[:5]
+    summary = {
+        # Total number of 365 Premium licenses
+        'total_365_premium': sum(row[1] for row in data),
+
+        # Total number of Exchange licenses
+        'total_exchange': sum(row[2] for row in data),
+
+        # Total cost across all offices
+        'total_cost': sum(row[5] for row in data),
+
+        # Average cost per office
+        'avg_cost_per_office': sum(row[5] for row in data) / len(data),
+
+        # Highest cost among all offices
+        'highest_cost': max(row[5] for row in data),
+
+        # Name of the office with the highest cost
+        'highest_cost_office': next(row[0] for row in data if row[5] == max(r[5] for r in data)),
+
+        # Percentage of offices with both 365 Premium and Exchange licenses
+        'percent_both_licenses': sum(1 for row in data if row[1] > 0 and row[2] > 0) / len(data) * 100,
+
+        # Percentage of offices with only 365 Premium licenses
+        'percent_only_365': sum(1 for row in data if row[1] > 0 and row[2] == 0) / len(data) * 100,
+
+        # Percentage of offices with only Exchange licenses
+        'percent_only_exchange': sum(1 for row in data if row[1] == 0 and row[2] > 0) / len(data) * 100,
+
+        # Highest ratio of Exchange to 365 Premium licenses
+        'highest_exchange_ratio': max((row[2] / row[1] if row[1] > 0 else 0) for row in data),
+
+        # Name of the office with the highest Exchange to 365 Premium ratio
+        'highest_exchange_ratio_office': next(row[0] for row in data if (row[2] / row[1] if row[1] > 0 else 0) == max(
+            (r[2] / r[1] if r[1] > 0 else 0) for r in data)),
+
+        # Number of offices with no licenses
+        'offices_no_licenses': sum(1 for row in data if row[1] == 0 and row[2] == 0),
+
+        # Average number of licenses (both types) per office
+        'avg_licenses_per_office': (sum(row[1] for row in data) + sum(row[2] for row in data)) / len(data),
+
+        # Top 5 offices by cost, sorted in descending order
+        'top_offices_by_cost': sorted([(row[0], row[5]) for row in data], key=lambda x: x[1], reverse=True)[:5],
+
+        # Top 5 offices by total number of licenses, sorted in descending order
+        'top_offices_by_license': sorted([(row[0], row[1] + row[2]) for row in data], key=lambda x: x[1], reverse=True)[
+                                  :5],
+    }
 
     return summary

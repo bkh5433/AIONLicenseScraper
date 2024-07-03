@@ -5,6 +5,7 @@ from utils.validation import validate_csv
 from utils.logger import setup_logging, get_logger
 import os
 import json
+import time
 
 setup_logging()
 logger = get_logger(__name__)
@@ -47,6 +48,8 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    start_time = time.time()
+
     try:
         if 'file' not in request.files:
             logger.warning("No file part in the request")
@@ -80,6 +83,12 @@ def upload_file():
 
             result_path = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
             logger.info(f"File processed successfully: {file.filename}")
+
+            end_time = time.time()
+            processing_time = end_time - start_time
+            logger.info(f"Processing time for upload: {processing_time:.2f} seconds")
+
+            time.sleep(1)  # Wait for the file to be written to disk
             return redirect(url_for('show_summary', filename=os.path.basename(result_path)))
 
         logger.warning(f"File extension not allowed: {file.filename}")
@@ -115,13 +124,12 @@ def download_file(filename):
 
 @app.route('/summary/<filename>')
 def show_summary(filename):
-    logger.info(f"Generating summary for {filename}")
     try:
         file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
         summary_data = generate_summary(file_path)
         return render_template('summary.html', summary=summary_data, filename=filename)
     except Exception as e:
-        logger.exception("Error Generating Summary")
+        logger.exception("An error occurred while generating summary")
         return render_template('error.html',
                                error_title="An error occurred while generating the summary.",
                                error_message=str(e))
