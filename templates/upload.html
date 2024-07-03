@@ -284,6 +284,10 @@
             margin-top: 10px;
             font-style: italic;
             font-size: 0.9em;
+            font-weight: bold;
+            padding: 5px;
+            border-radius: 3px;
+            background-color: rgba(255, 255, 255, 0.1);
         }
     </style>
 </head>
@@ -461,21 +465,43 @@
 
     function getFileAge(file) {
         const now = new Date();
-        const fileDate = new Date(file.lastModified);
+        let fileDate;
+
+        // Try to get the file creation time
+        if ('getCreationTime' in file) {
+            // This is a non-standard property, but it works in some browsers
+            fileDate = new Date(file.getCreationTime());
+        } else if ('lastModified' in file) {
+            // Fall back to last modified time if creation time is not available
+            fileDate = new Date(file.lastModified);
+        } else {
+            // If neither is available, use the current time (this should rarely happen)
+            fileDate = now;
+        }
+
         const diffTime = Math.abs(now - fileDate);
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays;
+        return {age: diffDays, date: fileDate};
     }
 
     function updateFileAge(file) {
         const fileAgeDisplay = document.getElementById('file-age');
-        const age = getFileAge(file);
+        const {age, date} = getFileAge(file);
+        const formattedDate = date.toLocaleString(); // Format the date for display
+
         if (age === 0) {
-            fileAgeDisplay.textContent = 'File is current (modified today)';
+            fileAgeDisplay.textContent = `File is current (created today at ${formattedDate})`;
             fileAgeDisplay.style.color = '#4CAF50';
         } else {
-            fileAgeDisplay.textContent = `File is ${age} day(s) old`;
-            fileAgeDisplay.style.color = age > 7 ? '#FF9800' : '#4CAF50';
+            fileAgeDisplay.textContent = `File is ${age} day(s) old (created on ${formattedDate})`;
+            if (age > 30) {
+                fileAgeDisplay.style.color = '#FF0000';
+                fileAgeDisplay.textContent += ' - Warning: This file is more than 30 days old!';
+            } else if (age > 7) {
+                fileAgeDisplay.style.color = '#FF9800';
+            } else {
+                fileAgeDisplay.style.color = '#4CAF50';
+            }
         }
     }
 
