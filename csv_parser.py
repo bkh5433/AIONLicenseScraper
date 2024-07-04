@@ -14,7 +14,7 @@ def read_and_prepare_data(file_path):
     try:
         df = pd.read_csv(file_path)
         df['Office'] = df['Office'].str.strip()
-        logger.info(f"Data read successfully from {file_path}")
+        logger.info(f"csv cleaned successfully from {file_path}")
         return df
     except FileNotFoundError:
         logger.error(f"File not found: {file_path}")
@@ -38,6 +38,7 @@ def initialize_license_counts(df, target_licenses):
 
 def process_licenses(df, target_licenses, license_counts):
     """Process each row in the DataFrame to count licenses and log specific organizations."""
+    logger.info("Processing licenses")
     unaccounted_users = []
     aion_management = []
     aion_partners = []
@@ -69,6 +70,7 @@ def process_licenses(df, target_licenses, license_counts):
                     else:
                         properties.append([display_name, license, user_principal_name, office])
 
+    logger.info("Processed licenses")
     return license_counts, unaccounted_users, aion_management, aion_partners, properties
 
 
@@ -89,6 +91,7 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
                   cost_per_user, cost_per_exchange):
     """Save the processed data to an Excel file with specific formatting."""
     try:
+        logger.info(f"writing data to Excel file: {excel_path}")
         with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
             license_counts_df.to_excel(writer, sheet_name='License Counts')
             aion_management_df.to_excel(writer, sheet_name='AION Management', index=False)
@@ -159,6 +162,7 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
 
 
 def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
+    logger.info(f"Processing file: {file_path}")
     start_time = time.time()
     df = read_and_prepare_data(file_path)
     if df is None:
@@ -196,12 +200,13 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df, unaccounted_users,
                   cost_per_user,
                   cost_per_exchange)
+    logger.info(f"Processed file saved to: {excel_path}")
 
     try:
         os.remove(file_path)
-        logger.info(f"Removed processed file: {file_path}")
+        logger.info(f"Removed uploaded file: {file_path}")
     except OSError as e:
-        logger.error(f"Error removing file {file_path}: {e}")
+        logger.error(f"Error removing uploaded {file_path}: {e}")
 
     end_time = time.time()
     processing_time = end_time - start_time

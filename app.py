@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, send_from_directory
+from flask import render_template, request, redirect, url_for, send_from_directory, jsonify
 from csv_parser import process_file, generate_summary
 from create_app import app
 from utils.validation import validate_csv
@@ -22,6 +22,12 @@ def get_version_info():
 @app.context_processor
 def inject_version():
     return dict(version_info=get_version_info())
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+    logger.warning(f"Page not found {e}")
+    return render_template('404.html'), 404
 
 
 def allowed_file(filename):
@@ -133,6 +139,56 @@ def show_summary(filename):
         return render_template('error.html',
                                error_title="An error occurred while generating the summary.",
                                error_message=str(e))
+
+
+# TODO: Uncomment the following route to enable the logs API
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    log_file_path = os.path.join(app.config['LOG_DIR'], 'app.log')
+    invalid_lines = 0
+    try:
+        logs = []
+        invalid = []
+
+        with open(log_file_path, 'r') as log_file:
+            for line in log_file:
+                try:
+                    log_entry = json.loads(line.strip())
+                    logs.append(log_entry)
+                except json.JSONDecodeError:
+                    invalid_lines += 1
+                    invalid.append(line)
+                    # Skip invalid JSON lines
+                    continue
+
+        # Filter logs based on query parameters
+        level = request.args.get('level')
+        if level:
+            logs = [log for log in logs if log.get('level') == level.lower()]
+
+        # Filter by event
+        event = request.args.get('event')
+        if event:
+            logs = [log for log in logs if event.lower() in log.get('event', '').lower()]
+
+        # Filter by time range
+        start_time = request.args.get('start_time')
+        end_time = request.args.get('end_time')
+        if start_time:
+            logs = [log for log in logs if log.get('timestamp', '') >= start_time]
+        if end_time:
+            logs = [log for log in logs if log.get('timestamp', '') <= end_time]
+
+        # Get the last n lines
+        limit = request.args.get('limit', type=int)
+        if limit:
+            logs = logs[-limit:]
+
+        return jsonify({'logs': logs}), 200
+    except FileNotFoundError:
+        return jsonify({'error': 'Log file not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

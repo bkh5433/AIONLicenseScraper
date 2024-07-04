@@ -396,9 +396,9 @@
             uploadButton.disabled = false;
             updateFileAge(file);
         } else {
+            showErrorMessage(`${file.name} is not accepted. Please upload a .csv file.`);
             fileInput.value = '';
             showFileName('');
-            showErrorMessage('Incorrect file type. Please upload a CSV file.');
             uploadButton.disabled = true;
             triggerShakeAnimation();
             document.getElementById('file-age').textContent = '';
@@ -525,8 +525,6 @@
     {% endwith %}
 </script>
 
-<footer>
-</footer>
 {% include 'version_badge.html' %}
 </body>
 </html>
