@@ -1,7 +1,10 @@
-<div id="version-badge" class="version-badge">
+<div id="version-badge" class="version-badge" data-build-date="{{ version_info.date }}">
     <span class="version-info">v{{ version_info.version }}</span>
     <div class="version-details">
         <p>Branch: {{ version_info.branch }}</p>
-        <p>Built on: {{ version_info.date }}</p>
+        <p>Build: {{ version_info.build }}</p>
+        <p>Environment: {{ version_info.environment }}</p>
+        <p>Date: {{ version_info.date }}</p>
     </div>
 </div>
+<script src="{{ url_for('static', filename='js/version-badge.js') }}"></script>

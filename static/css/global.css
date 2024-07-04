@@ -41,3 +41,20 @@
     opacity: 1;
     margin-top: 5px;
 }
+
+.version-badge .environment {
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.version-badge.recent {
+    background-color: rgba(76, 175, 80, 0.8); /* Green */
+}
+
+.version-badge.moderate {
+    background-color: rgba(255, 193, 7, 0.8); /* Yellow */
+}
+
+.version-badge.old {
+    background-color: rgba(255, 87, 34, 0.8); /* Red */
+}

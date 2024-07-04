@@ -5,6 +5,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-unknown}
+        BRANCH: ${BRANCH:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
     volumes:
       - .:/app
       - ./logs:/app/logs
