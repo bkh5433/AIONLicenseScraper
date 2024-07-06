@@ -9,6 +9,10 @@ services:
         VERSION: ${VERSION:-unknown}
         BRANCH: ${BRANCH:-unknown}
         BUILD_DATE: ${BUILD_DATE:-unknown}
+        BUILD: ${BUILD:-unknown}
+        DEPLOY_ENV: ${DEPLOY_ENV:-unknown}
+
+
     volumes:
       - .:/app
       - ./logs:/app/logs
