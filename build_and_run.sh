@@ -53,6 +53,14 @@ echo "{
 REBUILD=false
 PRUNE=false
 
+echo "Stopping and removing existing containers..."
+if docker-compose ps -q | grep -q .; then
+    docker-compose down -v
+    echo "Containers stopped and removed."
+else
+    echo "No running containers found."
+fi
+
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --rebuild) REBUILD=true ;;
