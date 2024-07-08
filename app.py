@@ -1,26 +1,60 @@
-from flask import render_template, request, redirect, url_for, send_from_directory
-from csv_parser import process_file
+from flask import render_template, request, redirect, url_for, send_from_directory, jsonify
+from csv_parser import process_file, generate_summary
 from create_app import app
 from utils.validation import validate_csv
 from utils.logger import setup_logging, get_logger
 import os
 import json
+import time
 
 setup_logging()
 logger = get_logger(__name__)
 
 
 def get_version_info():
-    try:
-        with open('version.json', 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {"version": "unknown", "commit": "unknown", "date": "unknown"}
+    # First, try to get version info from environment variables
+    version = os.environ.get('APP_VERSION')
+    branch = os.environ.get('APP_BRANCH')
+    date = os.environ.get('APP_BUILD_DATE')
+    build = os.environ.get('APP_BUILD')
+    environment = os.environ.get('APP_ENVIRONMENT')
+
+    # If any of the environment variables are not set, try to read from version.json
+    if not all([version, branch, date, build, environment]):
+        try:
+            with open('version.json', 'r') as f:
+                version_data = json.load(f)
+                version = version_data.get('version', 'unknown')
+                branch = version_data.get('branch', 'unknown')
+                date = version_data.get('date', 'unknown')
+                build = version_data.get('build', 'unknown')
+                environment = version_data.get('environment', 'unknown')
+        except FileNotFoundError:
+            # If version.json doesn't exist, use default values
+            version = version or 'unknown'
+            branch = branch or 'unknown'
+            date = date or 'unknown'
+            build = build or 'unknown'
+            environment = environment or 'unknown'
+
+    return {
+        "version": version,
+        "branch": branch,
+        "date": date,
+        "build": build,
+        "environment": environment
+    }
 
 
 @app.context_processor
 def inject_version():
     return dict(version_info=get_version_info())
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+    logger.warning(f"Page not found {e}")
+    return render_template('404.html'), 404
 
 
 def allowed_file(filename):
@@ -47,6 +81,8 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    start_time = time.time()
+
     try:
         if 'file' not in request.files:
             logger.warning("No file part in the request")
@@ -80,7 +116,13 @@ def upload_file():
 
             result_path = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
             logger.info(f"File processed successfully: {file.filename}")
-            return redirect(url_for('download_file', filename=os.path.basename(result_path)))
+
+            end_time = time.time()
+            processing_time = end_time - start_time
+            logger.info(f"Processing time for upload: {processing_time:.2f} seconds")
+
+            time.sleep(1)  # Wait for the file to be written to disk
+            return redirect(url_for('show_summary', filename=os.path.basename(result_path)))
 
         logger.warning(f"File extension not allowed: {file.filename}")
         return redirect(request.url)
@@ -111,6 +153,69 @@ def download_file(filename):
         logger.exception(f"An error occurred during file download\n {e}")
         return render_template('error.html',
                                error_message=f"An error occurred while trying to download the file.\n {e}")
+
+
+@app.route('/summary/<filename>')
+def show_summary(filename):
+    try:
+        file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
+        summary_data = generate_summary(file_path)
+        return render_template('summary.html', summary=summary_data, filename=filename)
+    except Exception as e:
+        logger.exception("An error occurred while generating summary")
+        return render_template('error.html',
+                               error_title="An error occurred while generating the summary.",
+                               error_message=str(e))
+
+
+# TODO: Uncomment the following route to enable the logs API
+# @app.route('/api/logs', methods=['GET'])
+def get_logs():
+    log_file_path = os.path.join(app.config['LOG_DIR'], 'app.log')
+    invalid_lines = 0
+    try:
+        logs = []
+        invalid = []
+
+        with open(log_file_path, 'r') as log_file:
+            for line in log_file:
+                try:
+                    log_entry = json.loads(line.strip())
+                    logs.append(log_entry)
+                except json.JSONDecodeError:
+                    invalid_lines += 1
+                    invalid.append(line)
+                    # Skip invalid JSON lines
+                    continue
+
+        # Filter logs based on query parameters
+        level = request.args.get('level')
+        if level:
+            logs = [log for log in logs if log.get('level') == level.lower()]
+
+        # Filter by event
+        event = request.args.get('event')
+        if event:
+            logs = [log for log in logs if event.lower() in log.get('event', '').lower()]
+
+        # Filter by time range
+        start_time = request.args.get('start_time')
+        end_time = request.args.get('end_time')
+        if start_time:
+            logs = [log for log in logs if log.get('timestamp', '') >= start_time]
+        if end_time:
+            logs = [log for log in logs if log.get('timestamp', '') <= end_time]
+
+        # Get the last n lines
+        limit = request.args.get('limit', type=int)
+        if limit:
+            logs = logs[-limit:]
+
+        return jsonify({'logs': logs}), 200
+    except FileNotFoundError:
+        return jsonify({'error': 'Log file not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

@@ -13,8 +13,21 @@ RUN pip install -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-RUN chmod +x version.sh
-RUN ./version.sh
+# Set build arguments and pass them as environment variables
+ARG VERSION=unknown
+ARG BRANCH=unknown
+ARG BUILD_DATE=unknown
+ARG BUILD=unknown
+ARG DEPLOY_ENV=unknown
+
+ENV APP_VERSION=$VERSION
+ENV APP_BRANCH=$BRANCH
+ENV APP_BUILD_DATE=$BUILD_DATE
+ENV APP_BUILD=$BUILD
+ENV APP_ENVIRONMENT=$DEPLOY_ENV
+
+
+
 
 # env variables
 ENV FLASK_APP=app.py

@@ -3,8 +3,13 @@ import logging
 import os
 from flask import request, has_request_context
 from logging.handlers import RotatingFileHandler
+from create_app import app
 
-LOG_DIR = os.environ.get('LOG_DIR', 'logs')
+LOG_DIR = app.config["LOG_DIR"]
+
+
+def fetch_log_dir():
+    return LOG_DIR
 
 
 def add_request_info(_, __, event_dict):
