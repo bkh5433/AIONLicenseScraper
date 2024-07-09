@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# This script generates version information for the application and saves it to version.json
+# It is intended to be run as part of the build process.
+
 # Get the current date in YYYYMMDD format
 current_date=$(date +%Y%m%d)
 

@@ -1,8 +1,14 @@
+# Dockerfile.nginx
+# This Dockerfile sets up an Nginx reverse proxy for the AION License Count application
+
 # Use the official Nginx image from the Docker Hub
 FROM nginx:alpine
 
 # Copy the custom Nginx configuration file
+# This file should contain the necessary settings to proxy requests to the Flask application
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Copy SSL certificate and key for HTTPS support
+# Note: These are self-signed certificates and should be replaced with proper SSL certificates in production
 COPY ssl/selfsigned.crt /etc/nginx/ssl/selfsigned.crt
 COPY ssl/selfsigned.key /etc/nginx/ssl/selfsigned.key

@@ -1,3 +1,33 @@
+"""
+CSV Parser Module for AION License Count Application
+
+This module is responsible for processing CSV files containing Microsoft license data
+and generating detailed Excel reports with license counts and cost calculations.
+
+Key functionalities:
+1. Reading and cleaning CSV data
+2. Counting licenses per office and license type
+3. Categorizing users (AION Management, AION Partners, Properties, Unaccounted)
+4. Calculating costs based on license counts
+5. Generating a formatted Excel report with multiple sheets
+6. Creating a summary of license usage and costs
+
+The main entry point is the `process_file` function, which orchestrates the entire
+process from reading the input CSV to producing the final Excel report.
+
+This module is designed to work with the Flask web application, utilizing
+configuration settings and logging mechanisms defined in other parts of the project.
+
+Dependencies:
+- pandas: for data manipulation
+- openpyxl: for Excel file operations
+- utils.logger: for logging
+- create_app: for application configuration
+
+Note: This module assumes a specific structure for the input CSV file, including
+columns for 'Office', 'Licenses', 'User principal name', and 'Display name'.
+"""
+
 import pandas as pd
 import os
 import openpyxl
@@ -10,7 +40,15 @@ logger = get_logger(__name__)
 
 
 def read_and_prepare_data(file_path):
-    """Read CSV file and prepare the DataFrame by stripping whitespaces from the 'Office' column."""
+    """
+    Read CSV file and prepare the DataFrame by stripping whitespaces from the 'Office' column.
+
+    Args:
+        file_path (str): Path to the CSV file.
+
+    Returns:
+        pandas.DataFrame or None: Prepared DataFrame if successful, None otherwise.
+    """
     try:
         df = pd.read_csv(file_path)
         df['Office'] = df['Office'].str.strip()
@@ -28,7 +66,16 @@ def read_and_prepare_data(file_path):
 
 
 def initialize_license_counts(df, target_licenses):
-    """Initialize the license counts dictionary based on unique 'Office' values and target licenses."""
+    """
+    Initialize the license counts dictionary based on unique 'Office' values and target licenses.
+
+    Args:
+        df (pandas.DataFrame): The input DataFrame.
+        target_licenses (dict): Dictionary of target license types.
+
+    Returns:
+        dict: Initialized license counts dictionary.
+    """
     license_counts = {office.strip(): {key: 0 for key in target_licenses.keys()}
                       for office in df['Office'].unique() if pd.notna(office) and office.strip()}
     license_counts['Unaccounted'] = {key: 0 for key in target_licenses.keys()}
@@ -37,7 +84,17 @@ def initialize_license_counts(df, target_licenses):
 
 
 def process_licenses(df, target_licenses, license_counts):
-    """Process each row in the DataFrame to count licenses and log specific organizations."""
+    """
+    Process each row in the DataFrame to count licenses and log specific organizations.
+
+    Args:
+        df (pandas.DataFrame): The input DataFrame.
+        target_licenses (dict): Dictionary of target license types.
+        license_counts (dict): Initialized license counts dictionary.
+
+    Returns:
+        tuple: Updated license_counts, unaccounted_users, aion_management, aion_partners, properties
+    """
     logger.info("Processing licenses")
     unaccounted_users = []
     aion_management = []
@@ -75,7 +132,15 @@ def process_licenses(df, target_licenses, license_counts):
 
 
 def create_license_counts_df(license_counts):
-    """Convert the license counts dictionary to a DataFrame and calculate totals."""
+    """
+    Convert the license counts dictionary to a DataFrame and calculate totals.
+
+    Args:
+        license_counts (dict): License counts dictionary.
+
+    Returns:
+        pandas.DataFrame or None: DataFrame with license counts and totals if successful, None otherwise.
+    """
     try:
         license_counts_df = pd.DataFrame.from_dict(license_counts, orient='index').fillna(0)
         totals = license_counts_df.sum(axis=0).rename('Total')
@@ -89,7 +154,19 @@ def create_license_counts_df(license_counts):
 
 def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df, unaccounted_users,
                   cost_per_user, cost_per_exchange):
-    """Save the processed data to an Excel file with specific formatting."""
+    """
+       Save the processed data to an Excel file with specific formatting.
+
+       Args:
+           excel_path (str): Path to save the Excel file.
+           license_counts_df (pandas.DataFrame): DataFrame with license counts.
+           aion_management_df (pandas.DataFrame): DataFrame with AION Management data.
+           aion_partners_df (pandas.DataFrame): DataFrame with AION Partners data.
+           properties_df (pandas.DataFrame): DataFrame with Properties data.
+           unaccounted_users (pandas.DataFrame): DataFrame with unaccounted users' data.
+           cost_per_user (int): Cost per user.
+           cost_per_exchange (int): Cost per exchange license.
+       """
     try:
         logger.info(f"writing data to Excel file: {excel_path}")
         with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
@@ -162,6 +239,17 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
 
 
 def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
+    """
+        Main function to process the CSV file and generate the Excel report.
+
+        Args:
+            file_path (str): Path to the input CSV file.
+            cost_per_user (int, optional): Cost per user. Defaults to 115.
+            cost_per_exchange (int, optional): Cost per exchange license. Defaults to 20.
+
+        Returns:
+            str or None: Path to the generated Excel file if successful, None otherwise.
+        """
     logger.info(f"Processing file: {file_path}")
     start_time = time.time()
     df = read_and_prepare_data(file_path)
@@ -216,6 +304,15 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
 
 
 def generate_summary(file_path):
+    """
+        Generate a summary of the license counts from the Excel file.
+
+        Args:
+            file_path (str): Path to the Excel file.
+
+        Returns:
+            dict: Summary statistics of the license counts.
+        """
     workbook = openpyxl.load_workbook(file_path)
     sheet = workbook['License Counts']
 

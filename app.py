@@ -1,3 +1,10 @@
+"""
+Main application module for the AION License Count application.
+
+This module sets up the Flask application, defines routes, and handles
+file uploads, processing, and downloads.
+"""
+
 from flask import render_template, request, redirect, url_for, send_from_directory, jsonify
 from csv_parser import process_file, generate_summary
 from create_app import app
@@ -12,6 +19,14 @@ logger = get_logger(__name__)
 
 
 def get_version_info():
+    """
+        Retrieve version information from environment variables or version.json file.
+
+        Returns:
+            dict: A dictionary containing version information with keys:
+                  version, branch, date, build, and environment.
+        """
+
     # First, try to get version info from environment variables
     version = os.environ.get('APP_VERSION')
     branch = os.environ.get('APP_BRANCH')
@@ -48,32 +63,74 @@ def get_version_info():
 
 @app.context_processor
 def inject_version():
+    """
+      Inject version information into all templates.
+
+      Returns:
+          dict: A dictionary containing version information.
+      """
     return dict(version_info=get_version_info())
 
 
 @app.errorhandler(404)
 def page_not_found(e):
+    """
+     Handle 404 errors.
+
+     Args:
+         e: The error object.
+
+     Returns:
+         tuple: A tuple containing the rendered 404 template and the 404 status code.
+     """
     logger.warning(f"Page not found {e}")
     return render_template('404.html'), 404
 
 
 def allowed_file(filename):
+    """
+    Check if the file extension is allowed.
+
+    Args:
+        filename (str): The name of the file to check.
+
+    Returns:
+        bool: True if the file extension is allowed, False otherwise.
+    """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 
 @app.before_request
 def log_request_start():
+    """
+    Log the start of each request.
+    """
     logger.info(f"Start processing request: {request.method} {request.path}")
 
 
 @app.after_request
 def log_request_end(response):
+    """
+    Log the end of each request.
+
+    Args:
+        response: The response object.
+
+    Returns:
+        response: The unmodified response object.
+    """
     logger.info(f"Finished processing request: {request.method} {request.path} with status {response.status_code}")
     return response
 
 
 @app.route('/')
 def index():
+    """
+      Render the upload page.
+
+      Returns:
+          str: Rendered HTML for the upload page.
+      """
     logger.info("Rendering upload page")
     logger.info(f"App version: {get_version_info()}")
     return render_template('upload.html')
@@ -81,6 +138,12 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    """
+       Handle file uploads, validate the file, and process it.
+
+       Returns:
+           str: Redirects to the summary page on success, or renders an error page on failure.
+       """
     start_time = time.time()
 
     try:
@@ -135,6 +198,15 @@ def upload_file():
 
 @app.route('/download/<filename>')
 def download_file(filename):
+    """
+    Handle file downloads and remove the file after successful download.
+
+    Args:
+        filename (str): The name of the file to download.
+
+    Returns:
+        flask.Response: The file download response or an error page.
+    """
     try:
         file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
         response = send_from_directory(app.config['OUTPUT_FOLDER'], filename, as_attachment=True)
@@ -157,6 +229,16 @@ def download_file(filename):
 
 @app.route('/summary/<filename>')
 def show_summary(filename):
+    """
+    Generate and display the summary page for a processed file.
+
+    Args:
+        filename (str): The name of the processed file.
+
+    Returns:
+        str: Rendered HTML for the summary page or an error page.
+    """
+    
     try:
         file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
         summary_data = generate_summary(file_path)
