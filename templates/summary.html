@@ -210,19 +210,26 @@
     Chart.defaults.color = '#ffffff';
     Chart.defaults.borderColor = '#555555';
 
-    function createChart(elementId, labels, data, label) {
+    function createChart(elementId, labels, data, label, isCurrency = false) {
         var ctx = document.getElementById(elementId).getContext('2d');
         return new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: label,
-                    data: data,
+                    label: '365 Premium',
+                    data: isCurrency ? data.map(item => item[1]) : data.map(item => item[1]),
                     backgroundColor: 'rgba(255, 140, 0, 0.6)',
                     borderColor: 'rgba(255, 140, 0, 1)',
                     borderWidth: 1
-                }]
+                },
+                    {
+                        label: 'Exchange',
+                        data: isCurrency ? data.map(item => item[2]) : data.map(item => item[2]),
+                        backgroundColor: 'rgba(0, 123, 255, 0.6)',
+                        borderColor: 'rgba(0, 123, 255, 1)',
+                        borderWidth: 1
+                    }]
             },
             options: {
                 responsive: true,
@@ -230,13 +237,18 @@
                 scales: {
                     y: {
                         beginAtZero: true,
+                        stacked: true,
                         ticks: {
-                            callback: function (value, index, values) {
+                            callback: function (value) {
+                                if (isCurrency) {
+                                    return '$' + value.toLocaleString();
+                                }
                                 return value.toLocaleString();
                             }
                         }
                     },
                     x: {
+                        stacked: true,
                         ticks: {
                             autoSkip: false,
                             maxRotation: 0,
@@ -246,7 +258,32 @@
                 },
                 plugins: {
                     legend: {
-                        display: false
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                const dataIndex = context.dataIndex;
+                                const item = data[dataIndex];
+                                if (isCurrency) {
+                                    if (context.datasetIndex === 0) {
+                                        label += `$${item[1].toLocaleString()}`;
+                                    } else {
+                                        label += `$${item[2].toLocaleString()}`;
+                                    }
+                                    label += `\nTotal: $${item[3].toLocaleString()}`;
+                                } else {
+                                    label += `${context.parsed.y.toLocaleString()}`;
+                                    label += `\nTotal: ${item[3].toLocaleString()}`;
+                                }
+                                return label.split('\n');
+                            }
+                        }
                     }
                 },
                 layout: {
@@ -263,13 +300,16 @@
 
     createChart('topOfficesByCost',
         {{ summary.top_offices_by_cost|map(attribute=0)|list|tojson }},
-        {{ summary.top_offices_by_cost|map(attribute=1)|list|tojson }},
-        'Cost');
+        {{ summary.top_offices_by_cost|tojson }},
+        'Cost',
+        true
+    );
 
     createChart('topOfficesByLicense',
         {{ summary.top_offices_by_license|map(attribute=0)|list|tojson }},
-        {{ summary.top_offices_by_license|map(attribute=1)|list|tojson }},
-        'License Count');
+        {{ summary.top_offices_by_license|tojson }},
+        ''
+    );
 </script>
 
 {% include 'version_badge.html' %}

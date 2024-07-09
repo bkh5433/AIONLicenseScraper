@@ -364,11 +364,18 @@ def generate_summary(file_path):
         'avg_licenses_per_office': (sum(row[1] for row in data) + sum(row[2] for row in data)) / len(data),
 
         # Top 5 offices by cost, sorted in descending order
-        'top_offices_by_cost': sorted([(row[0], row[5]) for row in data], key=lambda x: x[1], reverse=True)[:5],
+        'top_offices_by_cost': sorted(
+            [(row[0], row[3], row[4], row[5]) for row in data],
+            key=lambda x: x[3],
+            reverse=True
+        )[:5],
 
         # Top 5 offices by total number of licenses, sorted in descending order
-        'top_offices_by_license': sorted([(row[0], row[1] + row[2]) for row in data], key=lambda x: x[1], reverse=True)[
-                                  :5],
+        'top_offices_by_license': sorted(
+            [(row[0], row[1], row[2], row[1] + row[2]) for row in data],
+            key=lambda x: x[3],
+            reverse=True
+        )[:5],
     }
 
     return summary
