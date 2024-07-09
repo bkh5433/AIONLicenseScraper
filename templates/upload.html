@@ -6,23 +6,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
     <style>
-        @keyframes shake {
-            0% {
-                transform: translateX(0);
-            }
-            25% {
-                transform: translateX(-5px);
-            }
-            50% {
-                transform: translateX(5px);
-            }
-            75% {
-                transform: translateX(-5px);
-            }
-            100% {
-                transform: translateX(0);
-            }
-        }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -377,10 +360,15 @@
     });
 
     uploadForm.addEventListener('submit', (event) => {
+        const costPerUser = parseFloat(document.getElementById('cost_per_user').value);
+        const costPerExchange = parseFloat(document.getElementById('cost_per_exchange').value);
+
         if (!fileInput.files.length || !allowedFile(fileInput.files[0])) {
             event.preventDefault();
-            showErrorMessage('Please select a valid CSV file before uploading.');
-            triggerShakeAnimation();
+            showErrorMessage('Please select a valid CSV file before generating.');
+        } else if (isNaN(costPerUser) || costPerUser < 0 || isNaN(costPerExchange) || costPerExchange < 0) {
+            event.preventDefault();
+            showErrorMessage('Please enter valid costs (must be numbers greater than or equal to 0).');
         } else {
             showSuccessMessage('File processed successfully.');
         }
@@ -388,6 +376,24 @@
 
     document.getElementById('cost_per_user').addEventListener('input', checkIfChanged);
     document.getElementById('cost_per_exchange').addEventListener('input', checkIfChanged);
+    document.getElementById('cost_per_user').addEventListener('input', validateCost);
+    document.getElementById('cost_per_exchange').addEventListener('input', validateCost);
+
+    function validateCost(event) {
+        const input = event.target;
+        const value = parseFloat(input.value);
+
+        if (isNaN(value) || value < 0) {
+            input.setCustomValidity('Enter a valid number greater than or equal to 0.');
+            input.reportValidity();
+            uploadButton.disabled = true;
+        } else {
+            input.setCustomValidity('');
+            uploadButton.disabled = false;
+
+        }
+        checkIfChanged();
+    }
 
     function validateFile(file) {
         if (allowedFile(file)) {
@@ -400,7 +406,6 @@
             fileInput.value = '';
             showFileName('');
             uploadButton.disabled = true;
-            triggerShakeAnimation();
             document.getElementById('file-age').textContent = '';
         }
     }
@@ -431,13 +436,6 @@
 
     function hideErrorMessage() {
         errorMessageDisplay.textContent = '';
-    }
-
-    function triggerShakeAnimation() {
-        container.classList.add('shake');
-        setTimeout(() => {
-            container.classList.remove('shake');
-        }, 500);
     }
 
     function resetToDefault() {
