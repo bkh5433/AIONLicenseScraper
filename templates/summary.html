@@ -339,6 +339,7 @@
         let cleanupTimeout;
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'hidden' && !hasDownloaded) {
+                console.log('Page is now hidden. Will cleanup in 5 minutes.')
                 cleanupTimeout = setTimeout(() => {
                     fetch('/cleanup_undownloaded', {
                         method: 'POST',
@@ -352,6 +353,7 @@
                 }, 5 * 60 * 1000);
 
             } else if (document.visibilityState === 'visible') {
+                console.log('Page is now visible. Clearing cleanup timeout.')
                 clearTimeout(cleanupTimeout);
             }
         });

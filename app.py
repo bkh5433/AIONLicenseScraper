@@ -13,6 +13,7 @@ from utils.logger import setup_logging, get_logger
 import os
 import json
 import time
+import datetime
 
 setup_logging()
 logger = get_logger(__name__)
@@ -275,7 +276,8 @@ def show_summary(filename):
 
 @app.route('/cleanup_undownloaded', methods=['POST'])
 def cleanup_undownloaded():
-    logger.info("Cleanup undownloaded function called")
+    current_time = datetime.datetime.now().strftime("%H:%M:%S")
+    logger.info(f"Cleanup process initiated at {current_time}")
     file_id = session.get('pending_file_id')
     logger.info(f"File ID from session: {file_id}")
     if file_id:
