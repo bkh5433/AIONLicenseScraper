@@ -5,7 +5,7 @@ This module sets up the Flask application, defines routes, and handles
 file uploads, processing, and downloads.
 """
 
-from flask import render_template, request, redirect, url_for, send_from_directory, jsonify
+from flask import render_template, request, redirect, url_for, send_from_directory, jsonify, session, Response
 from csv_parser import process_file, generate_summary
 from create_app import app
 from utils.validation import validate_csv
@@ -177,8 +177,15 @@ def upload_file():
                                        error_title='Invalid CSV File',
                                        error_message=error_message)
 
-            result_path = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
+            result_path, friendly_filename = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
             logger.info(f"File processed successfully: {file.filename}")
+            file_id = os.path.basename(result_path).split('_')[0]
+            if file_id:
+                session['pending_file_id'] = file_id
+                session['friendly_filename'] = friendly_filename
+                logger.info(f"Set pending file ID in session: {file_id}")
+            else:
+                logger.warning(f"Unable to extract file ID from filename: {os.path.basename(result_path)}")
 
             end_time = time.time()
             processing_time = end_time - start_time
@@ -209,22 +216,35 @@ def download_file(filename):
     """
     try:
         file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
-        response = send_from_directory(app.config['OUTPUT_FOLDER'], filename, as_attachment=True)
-        if response.status_code == 200:
-            logger.info(f"File downloaded: {filename}")
-        else:
-            logger.error(f"Error downloading file: {filename}")
-            logger.error(response)
-        try:
-            os.remove(file_path)  # Remove the file after download
-            logger.info(f"Removed downloaded file: {filename}")
-        except OSError as e:
-            logger.error(f"Error removing file {filename}: {e}")
+        if not os.path.exists(file_path):
+            logger.error(f"File not found: {filename}")
+            return render_template('error.html',
+                                   error_message=f"The requested file does not exist.")
+
+        friendly_filename = session.get('friendly_filename', filename)
+
+        def generate():
+            with open(file_path, 'rb') as f:
+                yield from f
+
+            # Cleanup after file has been sent
+            try:
+                os.remove(file_path)
+                logger.info(f"Removed downloaded file: {filename}")
+                session.pop('pending_file_id', None)
+                session.pop('friendly_filename', None)
+                logger.info(f"Cleared session data for: {filename}")
+            except Exception as e:
+                logger.error(f"Error in cleanup after download for {filename}: {e}")
+
+        response = Response(generate(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response.headers["Content-Disposition"] = f"attachment; filename={friendly_filename}"
         return response
+
     except Exception as e:
-        logger.exception(f"An error occurred during file download\n {e}")
+        logger.exception(f"An unexpected error occurred during file download: {e}")
         return render_template('error.html',
-                               error_message=f"An error occurred while trying to download the file.\n {e}")
+                               error_message=f"An unexpected error occurred while trying to download the file: {e}")
 
 
 @app.route('/summary/<filename>')
@@ -238,16 +258,55 @@ def show_summary(filename):
     Returns:
         str: Rendered HTML for the summary page or an error page.
     """
-    
+
     try:
         file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
         summary_data = generate_summary(file_path)
-        return render_template('summary.html', summary=summary_data, filename=filename)
+        user_friendly_filename = session.get('friendly_filename', filename)
+        return render_template('summary.html', summary=summary_data,
+                               filename=filename,
+                               user_friendly_filename=user_friendly_filename)
     except Exception as e:
         logger.exception("An error occurred while generating summary")
         return render_template('error.html',
                                error_title="An error occurred while generating the summary.",
                                error_message=str(e))
+
+
+@app.route('/cleanup_undownloaded', methods=['POST'])
+def cleanup_undownloaded():
+    logger.info("Cleanup undownloaded function called")
+    file_id = session.get('pending_file_id')
+    logger.info(f"File ID from session: {file_id}")
+    if file_id:
+        output_folder = app.config['OUTPUT_FOLDER']
+        logger.info(f"Attempting to clean up undownloaded file with prefix: {file_id}")
+        files_found = False
+        for filename in os.listdir(output_folder):
+            if filename.startswith(str(file_id)):
+                files_found = True
+                file_path = os.path.join(output_folder, filename)
+                try:
+                    os.remove(file_path)
+                    logger.info(f"Cleaned up undownloaded file: {filename}")
+                except OSError as e:
+                    logger.error(f"Error removing undownloaded file {filename}: {e}")
+        if not files_found:
+            logger.warning(f"No files found with prefix {file_id}")
+        session.pop('pending_file_id', None)
+        session.pop('friendly_filename', None)
+        logger.info("Cleared session data")
+    else:
+        logger.warning("No file ID found in session for cleanup")
+    return '', 204
+
+
+@app.route('/check_session')
+def check_session():
+    return jsonify({
+        'pending_file_id': session.get('pending_file_id'),
+        'friendly_filename': session.get('friendly_filename')
+    })
 
 
 # TODO: Uncomment the following route to enable the logs API

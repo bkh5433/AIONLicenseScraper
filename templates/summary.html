@@ -311,6 +311,52 @@
         ''
     );
 </script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var downloadButton = document.querySelector('a.button[href^="/download/"]');
+        var hasDownloaded = false;
+
+        if (downloadButton) {
+            downloadButton.addEventListener('click', function () {
+                hasDownloaded = true;
+            });
+        }
+
+        window.addEventListener('beforeunload', function (e) {
+            if (!hasDownloaded) {
+                fetch('/cleanup_undownloaded', {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'cleanup=true'
+                }).catch(error => console.error('Error:', error));
+            }
+        });
+
+        // Add visibility change event listener
+        let cleanupTimeout;
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden' && !hasDownloaded) {
+                cleanupTimeout = setTimeout(() => {
+                    fetch('/cleanup_undownloaded', {
+                        method: 'POST',
+                        keepalive: true,
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: 'cleanup=true'
+                    }).catch(error => console.error('Error:', error));
+
+                }, 5 * 60 * 1000);
+
+            } else if (document.visibilityState === 'visible') {
+                clearTimeout(cleanupTimeout);
+            }
+        });
+    });
+</script>
 
 {% include 'version_badge.html' %}
 </body>

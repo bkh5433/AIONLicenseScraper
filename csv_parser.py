@@ -32,6 +32,7 @@ import pandas as pd
 import os
 import openpyxl
 import time
+import uuid
 from datetime import datetime
 from utils.logger import get_logger
 from create_app import app
@@ -282,8 +283,11 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
                                  columns=['Display Name', 'License Type', 'User Principal Name', 'Office'])
     unaccounted_users = pd.DataFrame(unaccounted_users, columns=['Display Name', 'License Type', 'User Principal Name'])
 
-    current_date = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-    excel_path = os.path.join(app.config['OUTPUT_FOLDER'], f"license_counts_{current_date}.xlsx")
+    current_date = datetime.now().strftime('%Y_%m_%d')
+    file_id = str(uuid.uuid4())
+    internal_filename = f"{file_id}_license_counts_{current_date}.xlsx"
+    friendly_filename = f"AION_License_Report_{current_date}.xlsx"
+    excel_path = os.path.join(app.config['OUTPUT_FOLDER'], internal_filename)
 
     save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df, unaccounted_users,
                   cost_per_user,
@@ -300,7 +304,7 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     processing_time = end_time - start_time
     logger.info(f"CSV processing time: {processing_time:.2f} seconds")
 
-    return excel_path
+    return excel_path, friendly_filename
 
 
 def generate_summary(file_path):
