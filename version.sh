@@ -23,10 +23,13 @@ echo $new_build > "$build_file"
 # Get the environment (default to 'dev' if not set)
 environment=${DEPLOY_ENV:-dev}
 
+SECRET_KEY=$(python -c "import os; print(os.urandom(24).hex())")
+
 echo "{
   \"version\": \"$(git describe --tags --always --dirty)\",
   \"branch\": \"$(git rev-parse --abbrev-ref HEAD)\",
   \"date\": \"$(git show -s --format=%ci HEAD)\",
   \"build\": \"$current_date.$new_build\",
-  \"environment\": \"$environment\"
+  \"environment\": \"$environment\",
+  \"secret_key\": \"$SECRET_KEY\"
 }" > version.json

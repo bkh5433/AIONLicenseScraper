@@ -39,6 +39,7 @@ VERSION=$(git describe --tags --always --dirty)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 BUILD_DATE=$(TZ=EST5EDT date +"%Y-%m-%dT%H:%M")
 BUILD="$current_date.$new_build"
+SECRET_KEY=$(python -c "import os; print(os.urandom(24).hex())")
 
 # Export the variables
 export VERSION
@@ -46,6 +47,7 @@ export BRANCH
 export BUILD_DATE
 export BUILD
 export DEPLOY_ENV="$environment"
+export FLASK_SECRET_KEY="$SECRET_KEY"
 
 # Print the information
 echo "Building with:"
@@ -54,6 +56,7 @@ echo "BRANCH: $BRANCH"
 echo "BUILD_DATE: $BUILD_DATE"
 echo "BUILD: $BUILD"
 echo "ENVIRONMENT: $environment"
+echo "FLASK_SECRET_KEY: $SECRET_KEY"
 
 # Create version.json file
 echo "{
@@ -61,7 +64,9 @@ echo "{
   \"branch\": \"$BRANCH\",
   \"date\": \"$BUILD_DATE\",
   \"build\": \"$BUILD\",
-  \"environment\": \"$environment\"
+  \"environment\": \"$environment\",
+  \"secret_key\": \"$SECRET_KEY\"
+
 }" > version.json
 
 # Parse command line arguments
