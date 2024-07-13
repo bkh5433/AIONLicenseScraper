@@ -11,13 +11,18 @@ from create_app import app
 from utils.validation import validate_csv
 from utils.logger import setup_logging, get_logger
 from utils.version_info import get_version_info
+from datetime import datetime, timezone
+from collections import Counter
 import os
 import json
 import time
-import datetime
+
+# import datetime
 
 setup_logging()
 logger = get_logger(__name__)
+unique_users = set()
+reports_generated = Counter()
 
 
 @app.context_processor
@@ -103,7 +108,9 @@ def upload_file():
        Returns:
            str: Redirects to the summary page on success, or renders an error page on failure.
        """
+    global unique_users, reports_generated
     start_time = time.time()
+    unique_users.add(request.remote_addr)
 
     try:
         if 'file' not in request.files:
@@ -137,6 +144,8 @@ def upload_file():
                                        error_message=error_message)
 
             result_path, friendly_filename = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
+            reports_generated[request.remote_addr] = reports_generated.get(request.remote_addr, 0) + 1
+
             logger.info(f"File processed successfully: {file.filename}")
             file_id = os.path.basename(result_path).split('_')[0]
             if file_id:
@@ -261,6 +270,11 @@ def cleanup_undownloaded():
     return '', 204
 
 
+@app.route('/admin')
+def admin_center():
+    return render_template('admin_center.html')
+
+
 @app.route('/check_session')
 def check_session():
     return jsonify({
@@ -270,53 +284,87 @@ def check_session():
 
 
 # TODO: Uncomment the following route to enable the logs API
-# @app.route('/api/logs', methods=['GET'])
+@app.route('/api/logs', methods=['GET'])
 def get_logs():
     log_file_path = os.path.join(app.config['LOG_DIR'], 'app.log')
-    invalid_lines = 0
+    level = request.args.get('level', '').lower()
+    search = request.args.get('search', '').lower()
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    http_method = request.args.get('http_method', '').upper()
+    ip_address = request.args.get('ip_address', '')
+    path = request.args.get('path', '')
+    user_agent = request.args.get('user_agent', '')
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 50))
+
+    def parse_timestamp(timestamp_str):
+        timestamp_str = timestamp_str.rstrip('Z')  # Remove trailing 'Z' if present
+        try:
+            return datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
+        except ValueError:
+            try:
+                return datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+            except ValueError:
+                return datetime.min.replace(tzinfo=timezone.utc)
+
+    all_logs = []
+    with open(log_file_path, 'r') as log_file:
+        for line in log_file:
+            try:
+                log_entry = json.loads(line.strip())
+                log_entry['parsed_timestamp'] = parse_timestamp(log_entry.get('timestamp', ''))
+                all_logs.append(log_entry)
+            except json.JSONDecodeError:
+                continue
+
+    # Sort all logs by timestamp in descending order
+    all_logs.sort(key=lambda x: x['parsed_timestamp'], reverse=True)
+
+    # Apply filters
+    filtered_logs = [
+        log for log in all_logs
+        if (not level or log.get('level', '').lower() == level) and
+           (not search or search in json.dumps(log).lower()) and
+           (not start_date or log['parsed_timestamp'] >= parse_timestamp(start_date)) and
+           (not end_date or log['parsed_timestamp'] <= parse_timestamp(end_date)) and
+           (not http_method or log.get('method', '').upper() == http_method) and
+           (not ip_address or log.get('ip', '') == ip_address) and
+           (not path or path in log.get('path', '')) and
+           (not user_agent or user_agent in log.get('user_agent', ''))
+    ]
+
+    # Calculate pagination
+    total_logs = len(filtered_logs)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_logs = filtered_logs[start:end]
+
+    # Remove the 'parsed_timestamp' field before sending the response
+    for log in paginated_logs:
+        log.pop('parsed_timestamp', None)
+
+    return jsonify({
+        'logs': paginated_logs,
+        'total': total_logs,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': (total_logs + per_page - 1) // per_page
+    })
+
+
+@app.route('/api/metrics')
+def get_metrics():
     try:
-        logs = []
-        invalid = []
-
-        with open(log_file_path, 'r') as log_file:
-            for line in log_file:
-                try:
-                    log_entry = json.loads(line.strip())
-                    logs.append(log_entry)
-                except json.JSONDecodeError:
-                    invalid_lines += 1
-                    invalid.append(line)
-                    # Skip invalid JSON lines
-                    continue
-
-        # Filter logs based on query parameters
-        level = request.args.get('level')
-        if level:
-            logs = [log for log in logs if log.get('level') == level.lower()]
-
-        # Filter by event
-        event = request.args.get('event')
-        if event:
-            logs = [log for log in logs if event.lower() in log.get('event', '').lower()]
-
-        # Filter by time range
-        start_time = request.args.get('start_time')
-        end_time = request.args.get('end_time')
-        if start_time:
-            logs = [log for log in logs if log.get('timestamp', '') >= start_time]
-        if end_time:
-            logs = [log for log in logs if log.get('timestamp', '') <= end_time]
-
-        # Get the last n lines
-        limit = request.args.get('limit', type=int)
-        if limit:
-            logs = logs[-limit:]
-
-        return jsonify({'logs': logs}), 200
-    except FileNotFoundError:
-        return jsonify({'error': 'Log file not found'}), 404
+        # Convert all values in reports_generated to integers
+        reports_count = sum(int(count) for count in reports_generated.values())
+        return jsonify({
+            'unique_users': len(unique_users),
+            'reports_generated': reports_count
+        })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception("Error occurred while fetching metrics")
+        return jsonify({'error': 'An error occurred while fetching metrics'}), 500
 
 
 if __name__ == '__main__':

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AION License Count Admin Center</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_center.css') }}">
+</head>
+<body>
+<div class="container">
+    <h1>AION License Count Admin Center</h1>
+    <div class="metrics">
+        <div class="metric">
+            <h2>Unique Users</h2>
+            <p id="unique-users-count">Loading...</p>
+        </div>
+        <div class="metric">
+            <h2>Reports Generated</h2>
+            <p id="reports-generated-count">Loading...</p>
+        </div>
+    </div>
+    <div class="logs-container">
+        <h2>Application Logs</h2>
+        <div class="log-filters">
+            <select id="log-level">
+                <option value="">All Levels</option>
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+                <option value="error">Error</option>
+            </select>
+            <input type="text" id="log-search" placeholder="Search logs...">
+            <input type="date" id="start-date" placeholder="Start Date">
+            <input type="date" id="end-date" placeholder="End Date">
+            <select id="http-method">
+                <option value="">All Methods</option>
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                {#                <option value="PUT">PUT</option>#}
+                {#                <option value="DELETE">DELETE</option>#}
+            </select>
+            <input type="text" id="ip-address" placeholder="IP Address">
+            <input type="text" id="path" placeholder="Path">
+            <input type="text" id="user-agent" placeholder="User Agent">
+            <button id="apply-filters">Apply Filters</button>
+        </div>
+        <div id="logs-output"></div>
+        <div id="loading-indicator" style="display: none;">Loading more logs...</div>
+    </div>
+</div>
+<script src="{{ url_for('static', filename='js/admin_center.js') }}"></script>
+</body>
+</html>
