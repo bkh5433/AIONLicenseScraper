@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
+    const logsContainer = document.getElementById('logs-container');
     const logsOutput = document.getElementById('logs-output');
     const logLevel = document.getElementById('log-level');
     const logSearch = document.getElementById('log-search');
@@ -39,7 +40,13 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         fetch(`/api/logs?${params}`)
-            .then(response => response.json())
+            .then(response => {
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    throw new Error('Unauthorized');
+                }
+                return response.json();
+            })
             .then(data => {
                 if (!append) {
                     logsOutput.innerHTML = '';
@@ -54,10 +61,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     // Construct the log message with more details
                     let logMessage = `
-                        <span class="log-timestamp">[${timestamp}]</span>
-                        <span class="log-level ${log.level}">${log.level.toUpperCase()}:</span>
-                        <span class="log-event">${log.event}</span>
-                    `;
+                    <span class="log-timestamp">[${timestamp}]</span>
+                    <span class="log-level ${log.level}">${log.level.toUpperCase()}:</span>
+                    <span class="log-event">${log.event}</span>
+                `;
 
                     // Add additional fields if they exist
                     if (log.ip) {
@@ -87,6 +94,10 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => {
                 console.error('Error fetching logs:', error);
+                if (error.message !== 'Unauthorized') {
+                    // Handle other types of errors
+                    logsOutput.innerHTML += '<p>Error loading logs</p>';
+                }
                 isLoading = false;
                 loadingIndicator.style.display = 'none';
             });
@@ -108,18 +119,38 @@ document.addEventListener('DOMContentLoaded', function () {
         fetchLogs(false);
     });
 
-    window.addEventListener('scroll', handleScroll);
+    logsContainer.addEventListener('scroll', handleScroll);
 
     fetchLogs(false);
 });
 
+function handleUnauthorized() {
+    console.error('Unauthorized');
+    document.body.innerHTML = '<h1>Unauthorized</h1><p>You do not have permission to view this page. Please log in.</p>';
+}
 
 function fetchMetrics() {
+    function handleUnauthorized() {
+        window.location.href = '/login';
+    }
+
     fetch('/api/metrics')
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 401) {
+                handleUnauthorized();
+                throw new Error('Unauthorized');
+            }
+            return response.json();
+        })
         .then(data => {
             document.getElementById('unique-users-count').textContent = data.unique_users;
             document.getElementById('reports-generated-count').textContent = data.reports_generated;
         })
-        .catch(error => console.error('Error fetching metrics:', error));
+        .catch(error => {
+            console.error('Error fetching metrics:', error);
+            if (error.message !== 'Unauthorized') {
+                document.getElementById('unique-users-count').textContent = 'Error loading';
+                document.getElementById('reports-generated-count').textContent = 'Error loading';
+            }
+        });
 }

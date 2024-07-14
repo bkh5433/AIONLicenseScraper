@@ -36,10 +36,17 @@ h1, h2 {
     padding: 20px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    max-height: 600px;
+    overflow-y: auto;
 }
 
 .log-filters {
     margin-bottom: 10px;
+    position: sticky; /* Keep filters visible when scrolling */
+    top: 0;
+    background: #fff;
+    padding: 10px 0;
+    z-index: 1;
 }
 
 #log-level, #log-search {
@@ -48,8 +55,6 @@ h1, h2 {
 }
 
 #logs-output {
-    height: 400px;
-    overflow-y: auto;
     border: 1px solid #ddd;
     padding: 10px;
     background-color: #f9f9f9;
@@ -120,4 +125,8 @@ h1, h2 {
     padding: 10px;
     font-style: italic;
     color: #666;
+    position: sticky;
+    bottom: 0;
+    background: #f9f9f9;
+    border-top: 1px solid #ddd;
 }

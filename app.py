@@ -6,6 +6,7 @@ file uploads, processing, and downloads.
 """
 
 from flask import render_template, request, redirect, url_for, send_from_directory, jsonify, session, Response
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from csv_parser import process_file, generate_summary
 from create_app import app
 from utils.validation import validate_csv
@@ -13,16 +14,34 @@ from utils.logger import setup_logging, get_logger
 from utils.version_info import get_version_info
 from datetime import datetime, timezone
 from collections import Counter
+from functools import wraps
 import os
 import json
 import time
-
-# import datetime
 
 setup_logging()
 logger = get_logger(__name__)
 unique_users = set()
 reports_generated = Counter()
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+
+class User(UserMixin):
+    def __init__(self, id):
+        self.id = id
+
+
+users = {
+    'admin': {'password': 'admin'}
+}
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User(user_id)
 
 
 @app.context_processor
@@ -34,6 +53,26 @@ def inject_version():
           dict: A dictionary containing version information.
       """
     return dict(version_info=get_version_info())
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        if username in users and users[username]['password'] == password:
+            user = User(username)
+            login_user(user)
+            return redirect(url_for('admin_center'))
+        return render_template('login.html', error="Invalid username or password")
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
 
 
 @app.errorhandler(404)
@@ -243,6 +282,8 @@ def show_summary(filename):
 
 @app.route('/cleanup_undownloaded', methods=['POST'])
 def cleanup_undownloaded():
+    import datetime
+
     current_time = datetime.datetime.now().strftime("%H:%M:%S")
     logger.info(f"Cleanup process initiated at {current_time}")
     file_id = session.get('pending_file_id')
@@ -271,6 +312,7 @@ def cleanup_undownloaded():
 
 
 @app.route('/admin')
+@login_required
 def admin_center():
     return render_template('admin_center.html')
 
@@ -283,8 +325,19 @@ def check_session():
     })
 
 
+def api_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
 # TODO: Uncomment the following route to enable the logs API
 @app.route('/api/logs', methods=['GET'])
+@api_login_required
 def get_logs():
     log_file_path = os.path.join(app.config['LOG_DIR'], 'app.log')
     level = request.args.get('level', '').lower()
@@ -354,6 +407,7 @@ def get_logs():
 
 
 @app.route('/api/metrics')
+@api_login_required
 def get_metrics():
     try:
         # Convert all values in reports_generated to integers
@@ -363,7 +417,7 @@ def get_metrics():
             'reports_generated': reports_count
         })
     except Exception as e:
-        logger.exception("Error occurred while fetching metrics")
+        logger.exception("Error occurred while fetching metrics", exc_info=e)
         return jsonify({'error': 'An error occurred while fetching metrics'}), 500
 
 
