@@ -9,7 +9,6 @@
 <body>
 <div class="container">
     <h1>AION License Count Admin Center</h1>
-    <!-- Add this near the top of your admin_center.html -->
     <div class="user-info">
         Logged in as: {{ current_user.id }}
         <a href="{{ url_for('logout') }}">Logout</a>
@@ -26,6 +25,7 @@
     </div>
     <div id="logs-container" class="logs-container">
         <h2>Application Logs</h2>
+
         <div class="log-filters">
             <select id="log-level">
                 <option value="">All Levels</option>
@@ -33,23 +33,28 @@
                 <option value="warning">Warning</option>
                 <option value="error">Error</option>
             </select>
-            <input type="text" id="log-search" placeholder="Search logs...">
-            <input type="date" id="start-date" placeholder="Start Date">
-            <input type="date" id="end-date" placeholder="End Date">
             <select id="http-method">
                 <option value="">All Methods</option>
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
-                {#                <option value="PUT">PUT</option>#}
-                {#                <option value="DELETE">DELETE</option>#}
             </select>
-            <input type="text" id="ip-address" placeholder="IP Address">
-            <input type="text" id="path" placeholder="Path">
-            <input type="text" id="user-agent" placeholder="User Agent">
+            {#        <input type="text" id="log-search" placeholder="Search logs...">#}
+            <label>
+                <input type="checkbox" id="exclude-api" checked>
+                Exclude API calls
+            </label>
             <button id="apply-filters">Apply Filters</button>
         </div>
+
         <div id="logs-output"></div>
-        <div id="loading-indicator" style="display: none;">Loading more logs...</div>
+
+        <div id="load-more-container" style="text-align: center; margin-top: 20px;">
+            <button id="load-more-logs">Load More Logs</button>
+        </div>
+
+        <div id="loading-indicator" style="display: none;">
+            Loading logs...
+        </div>
     </div>
 </div>
 <script src="{{ url_for('static', filename='js/admin_center.js') }}"></script>

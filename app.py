@@ -7,6 +7,7 @@ file uploads, processing, and downloads.
 
 from flask import render_template, request, redirect, url_for, send_from_directory, jsonify, session, Response
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask.json import jsonify
 from csv_parser import process_file, generate_summary
 from create_app import app
 from utils.validation import validate_csv
@@ -33,6 +34,22 @@ class User(UserMixin):
     def __init__(self, id):
         self.id = id
 
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+def custom_jsonify(*args, **kwargs):
+    return app.response_class(
+        json.dumps(dict(*args, **kwargs), cls=CustomJSONEncoder),
+        mimetype='application/json'
+    )
+
+
+app.json_encoder = CustomJSONEncoder
 
 users = {
     'admin': {'password': 'admin'}
@@ -319,7 +336,7 @@ def admin_center():
 
 @app.route('/check_session')
 def check_session():
-    return jsonify({
+    return custom_jsonify({
         'pending_file_id': session.get('pending_file_id'),
         'friendly_filename': session.get('friendly_filename')
     })
@@ -329,7 +346,7 @@ def api_login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
-            return jsonify({'error': 'Unauthorized'}), 401
+            return custom_jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
 
     return decorated_function
@@ -345,6 +362,7 @@ def get_logs():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     http_method = request.args.get('http_method', '').upper()
+    exclude_api = request.args.get('exclude_api', 'false').lower() == 'true'
     ip_address = request.args.get('ip_address', '')
     path = request.args.get('path', '')
     user_agent = request.args.get('user_agent', '')
@@ -352,40 +370,59 @@ def get_logs():
     per_page = int(request.args.get('per_page', 50))
 
     def parse_timestamp(timestamp_str):
-        timestamp_str = timestamp_str.rstrip('Z')  # Remove trailing 'Z' if present
-        try:
-            return datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
-        except ValueError:
+        if isinstance(timestamp_str, str):
+            timestamp_str = timestamp_str.rstrip('Z')  # Remove trailing 'Z' if present
             try:
-                return datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+                return datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
             except ValueError:
-                return datetime.min.replace(tzinfo=timezone.utc)
+                try:
+                    return datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+                except ValueError:
+                    return timestamp_str  # Return the original string if parsing fails
+        return timestamp_str  # Return as-is if it's not a string (e.g., already a datetime object)
 
     all_logs = []
     with open(log_file_path, 'r') as log_file:
         for line in log_file:
             try:
                 log_entry = json.loads(line.strip())
-                log_entry['parsed_timestamp'] = parse_timestamp(log_entry.get('timestamp', ''))
-                all_logs.append(log_entry)
             except json.JSONDecodeError:
-                continue
+                log_entry = {
+                    "level": "ERROR",
+                    "event": line.strip(),
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            log_entry['parsed_timestamp'] = parse_timestamp(log_entry.get('timestamp', ''))
+            all_logs.append(log_entry)
 
     # Sort all logs by timestamp in descending order
-    all_logs.sort(key=lambda x: x['parsed_timestamp'], reverse=True)
+    all_logs.sort(key=lambda x: x['parsed_timestamp'] if isinstance(x['parsed_timestamp'], datetime) else datetime.min,
+                  reverse=True)
 
     # Apply filters
-    filtered_logs = [
-        log for log in all_logs
-        if (not level or log.get('level', '').lower() == level) and
-           (not search or search in json.dumps(log).lower()) and
-           (not start_date or log['parsed_timestamp'] >= parse_timestamp(start_date)) and
-           (not end_date or log['parsed_timestamp'] <= parse_timestamp(end_date)) and
-           (not http_method or log.get('method', '').upper() == http_method) and
-           (not ip_address or log.get('ip', '') == ip_address) and
-           (not path or path in log.get('path', '')) and
-           (not user_agent or user_agent in log.get('user_agent', ''))
-    ]
+    filtered_logs = []
+    for log in all_logs:
+        if (not level or log.get('level', '').lower() == level) and \
+                (not start_date or (
+                        isinstance(log['parsed_timestamp'], datetime) and log['parsed_timestamp'] >= parse_timestamp(
+                    start_date))) and \
+                (not end_date or (
+                        isinstance(log['parsed_timestamp'], datetime) and log['parsed_timestamp'] <= parse_timestamp(
+                    end_date))) and \
+                (not http_method or log.get('method', '').upper() == http_method) and \
+                (not ip_address or log.get('ip', '') == ip_address) and \
+                (not path or path in log.get('path', '')) and \
+                (not user_agent or user_agent in log.get('user_agent', '')) and \
+                (not exclude_api or not log.get('path', '').startswith('/api/')):
+
+            log_copy = log.copy()
+            for key, value in log_copy.items():
+                if isinstance(value, datetime):
+                    log_copy[key] = value.isoformat()
+
+            if not search or search.lower() in json.dumps(log_copy, cls=CustomJSONEncoder).lower():
+                filtered_logs.append(log_copy)
 
     # Calculate pagination
     total_logs = len(filtered_logs)
@@ -393,11 +430,25 @@ def get_logs():
     end = start + per_page
     paginated_logs = filtered_logs[start:end]
 
-    # Remove the 'parsed_timestamp' field before sending the response
+    # Prepare logs for output
     for log in paginated_logs:
-        log.pop('parsed_timestamp', None)
+        if 'parsed_timestamp' in log:
+            if isinstance(log['parsed_timestamp'], datetime):
+                log['timestamp'] = log['parsed_timestamp'].isoformat()
+            else:
+                log['timestamp'] = log['parsed_timestamp']
+            del log['parsed_timestamp']
+        if 'event' not in log and 'message' in log:
+            log['event'] = log['message']
+        if 'event' not in log:
+            log['event'] = 'No event provided'
+        if 'level' not in log:
+            log['level'] = 'INFO'
+        for key, value in log.items():
+            if not isinstance(value, (str, int, float, bool, type(None))):
+                log[key] = str(value)
 
-    return jsonify({
+    return custom_jsonify({
         'logs': paginated_logs,
         'total': total_logs,
         'page': page,
@@ -412,13 +463,13 @@ def get_metrics():
     try:
         # Convert all values in reports_generated to integers
         reports_count = sum(int(count) for count in reports_generated.values())
-        return jsonify({
+        return custom_jsonify({
             'unique_users': len(unique_users),
             'reports_generated': reports_count
         })
     except Exception as e:
         logger.exception("Error occurred while fetching metrics", exc_info=e)
-        return jsonify({'error': 'An error occurred while fetching metrics'}), 500
+        return custom_jsonify({'error': 'An error occurred while fetching metrics'}), 500
 
 
 if __name__ == '__main__':

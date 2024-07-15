@@ -10,6 +10,7 @@ import logging
 import os
 from flask import request, has_request_context
 from logging.handlers import RotatingFileHandler
+from pythonjsonlogger import jsonlogger
 from create_app import app
 
 # Get the log directory from the app configuration
@@ -48,6 +49,19 @@ def add_request_info(_, __, event_dict):
         event_dict["method"] = request.method
 
     return event_dict
+
+
+class CustomJsonFormatter(jsonlogger.JsonFormatter):
+    def add_fields(self, log_record, record, message_dict):
+        super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
+        if not log_record.get('timestamp'):
+            log_record['timestamp'] = record.created
+        if log_record.get('level'):
+            log_record['level'] = record.levelname
+        else:
+            log_record['level'] = record.levelname
+        if 'exc_info' in log_record:
+            log_record['exception'] = self.formatException(record.exc_info)
 
 
 def setup_logging():

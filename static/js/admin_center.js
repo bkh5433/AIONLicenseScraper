@@ -9,8 +9,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const ipAddress = document.getElementById('ip-address');
     const path = document.getElementById('path');
     const userAgent = document.getElementById('user-agent');
+    const excludeApi = document.getElementById('exclude-api');
     const applyFilters = document.getElementById('apply-filters');
     const loadingIndicator = document.getElementById('loading-indicator');
+    const loadMoreButton = document.getElementById('load-more-logs');
 
     let currentPage = 1;
     let isLoading = false;
@@ -18,23 +20,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     fetchMetrics();
 
-    //     setInterval(fetchMetrics, 60000); // Refresh metrics every minute
-
     function fetchLogs(append = false) {
-        if (isLoading || !hasMoreLogs) return;
+        if (isLoading) return;
 
         isLoading = true;
-        loadingIndicator.style.display = 'block';
+        if (loadingIndicator) loadingIndicator.style.display = 'block';
+        if (loadMoreButton) loadMoreButton.style.display = 'none';
 
         const params = new URLSearchParams({
-            level: logLevel.value,
-            search: logSearch.value,
-            start_date: startDate.value,
-            end_date: endDate.value,
-            http_method: httpMethod.value,
-            ip_address: ipAddress.value,
-            path: path.value,
-            user_agent: userAgent.value,
+            level: logLevel ? logLevel.value : '',
+            search: logSearch ? logSearch.value : '',
+            start_date: startDate ? startDate.value : '',
+            end_date: endDate ? endDate.value : '',
+            http_method: httpMethod ? httpMethod.value : '',
+            ip_address: ipAddress ? ipAddress.value : '',
+            path: path ? path.value : '',
+            user_agent: userAgent ? userAgent.value : '',
+            exclude_api: excludeApi ? excludeApi.checked : false,
             page: currentPage,
             per_page: 50
         });
@@ -42,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch(`/api/logs?${params}`)
             .then(response => {
                 if (response.status === 401) {
-                    window.location.href = '/login';
+                    handleUnauthorized();
                     throw new Error('Unauthorized');
                 }
                 return response.json();
@@ -50,7 +52,6 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(data => {
                 if (!append) {
                     logsOutput.innerHTML = '';
-                    currentPage = 1;
                 }
 
                 data.logs.forEach(log => {
@@ -61,65 +62,74 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     // Construct the log message with more details
                     let logMessage = `
-                    <span class="log-timestamp">[${timestamp}]</span>
-                    <span class="log-level ${log.level}">${log.level.toUpperCase()}:</span>
-                    <span class="log-event">${log.event}</span>
-                `;
+        <span class="log-timestamp">[${timestamp}]</span>
+        <span class="log-level ${log.level.toLowerCase()}">${log.level.toUpperCase()}:</span>
+        <pre class="log-event">${escapeHtml(log.event || 'No event')}</pre>
+    `;
 
                     // Add additional fields if they exist
                     if (log.ip) {
-                        logMessage += `<span class="log-ip">IP: ${log.ip}</span>`;
+                        logMessage += `<span class="log-ip">IP: ${escapeHtml(log.ip)}</span>`;
                     }
                     if (log.user_agent) {
-                        logMessage += `<span class="log-user-agent">User Agent: ${log.user_agent}</span>`;
+                        logMessage += `<span class="log-user-agent">User Agent: ${escapeHtml(log.user_agent)}</span>`;
                     }
                     if (log.path) {
-                        logMessage += `<span class="log-path">Path: ${log.path}</span>`;
+                        logMessage += `<span class="log-path">Path: ${escapeHtml(log.path)}</span>`;
                     }
                     if (log.method) {
-                        logMessage += `<span class="log-method">Method: ${log.method}</span>`;
+                        logMessage += `<span class="log-method">Method: ${escapeHtml(log.method)}</span>`;
                     }
                     if (log.exception) {
-                        logMessage += `<pre class="log-exception">Exception: ${log.exception}</pre>`;
+                        logMessage += `<pre class="log-exception">Exception: ${escapeHtml(log.exception)}</pre>`;
                     }
 
                     logEntry.innerHTML = logMessage;
-                    logEntry.className = `log-entry ${log.level}`;
+                    logEntry.className = `log-entry ${log.level.toLowerCase()}`;
                     logsOutput.appendChild(logEntry);
                 });
 
+                // Helper function to escape HTML
+                function escapeHtml(unsafe) {
+                    return unsafe
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;")
+                        .replace(/'/g, "&#039;");
+                }
+
                 hasMoreLogs = currentPage < data.total_pages;
+                if (loadMoreButton) loadMoreButton.style.display = hasMoreLogs ? 'block' : 'none';
+
                 isLoading = false;
-                loadingIndicator.style.display = 'none';
+                if (loadingIndicator) loadingIndicator.style.display = 'none';
             })
             .catch(error => {
                 console.error('Error fetching logs:', error);
                 if (error.message !== 'Unauthorized') {
-                    // Handle other types of errors
                     logsOutput.innerHTML += '<p>Error loading logs</p>';
                 }
                 isLoading = false;
-                loadingIndicator.style.display = 'none';
+                if (loadingIndicator) loadingIndicator.style.display = 'none';
+                if (loadMoreButton) loadMoreButton.style.display = 'none';
             });
     }
 
-    function handleScroll() {
-        const scrollPosition = window.innerHeight + window.scrollY;
-        const bodyHeight = document.body.offsetHeight;
-
-        if (scrollPosition >= bodyHeight - 200 && !isLoading && hasMoreLogs) {
-            currentPage++;
-            fetchLogs(true);
-        }
+    if (applyFilters) {
+        applyFilters.addEventListener('click', () => {
+            currentPage = 1;
+            hasMoreLogs = true;
+            fetchLogs(false);
+        });
     }
 
-    applyFilters.addEventListener('click', () => {
-        currentPage = 1;
-        hasMoreLogs = true;
-        fetchLogs(false);
-    });
-
-    logsContainer.addEventListener('scroll', handleScroll);
+    if (loadMoreButton) {
+        loadMoreButton.addEventListener('click', () => {
+            currentPage++;
+            fetchLogs(true);
+        });
+    }
 
     fetchLogs(false);
 });
@@ -130,10 +140,6 @@ function handleUnauthorized() {
 }
 
 function fetchMetrics() {
-    function handleUnauthorized() {
-        window.location.href = '/login';
-    }
-
     fetch('/api/metrics')
         .then(response => {
             if (response.status === 401) {
