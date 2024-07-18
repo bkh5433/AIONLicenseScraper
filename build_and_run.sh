@@ -74,8 +74,8 @@ REBUILD=false
 PRUNE=false
 
 echo "Stopping and removing existing containers..."
-if docker-compose ps -q | grep -q .; then
-    docker-compose down -v
+if docker compose ps -q | grep -q .; then
+    docker compose down -v
     echo "Containers stopped and removed."
 else
     echo "No running containers found."
@@ -100,10 +100,10 @@ fi
 # Rebuild Docker images if requested
 if [ "$REBUILD" = true ]; then
     echo "Rebuilding Docker images..."
-    docker-compose build --no-cache
+    docker compose build --no-cache
 fi
 
 echo "Starting or updating containers..."
-docker-compose up -d --build
+docker compose up -d --build
 
 echo "Operation completed."

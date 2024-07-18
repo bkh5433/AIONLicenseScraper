@@ -5,8 +5,8 @@ This module sets up the Flask application, defines routes, and handles
 file uploads, processing, and downloads.
 """
 
-from flask import render_template, request, redirect, url_for, send_from_directory, jsonify, session, Response
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask import render_template, request, redirect, url_for, session, Response
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from flask.json import jsonify
 from csv_parser import process_file, generate_summary
 from create_app import app
@@ -16,6 +16,12 @@ from utils.version_info import get_version_info
 from datetime import datetime, timezone
 from collections import Counter
 from functools import wraps
+from firebase_config import initialize_firestore
+from werkzeug.security import check_password_hash
+from models import User
+from metrics import increment_unique_users, increment_reports_generated
+from metrics import get_metrics as get_metrics
+from firebase_config import initialize_firestore as db
 import os
 import json
 import time
@@ -28,11 +34,6 @@ reports_generated = Counter()
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-
-
-class User(UserMixin):
-    def __init__(self, id):
-        self.id = id
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -51,14 +52,13 @@ def custom_jsonify(*args, **kwargs):
 
 app.json_encoder = CustomJSONEncoder
 
-users = {
-    'admin': {'password': 'admin'}
-}
-
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User(user_id)
+    user_doc = db().collection('users').document(user_id).get()
+    if user_doc.exists:
+        return User(user_id)
+    return None
 
 
 @app.context_processor
@@ -74,13 +74,26 @@ def inject_version():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    try:
+        logger.info("Initializing Firestore")
+        initialize_firestore()
+
+        logger.info("Admin user initialization completed")
+    except Exception as e:
+        logger.error(f"Error fetching admin user: {str(e)}", exc_info=True)
+
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        if username in users and users[username]['password'] == password:
-            user = User(username)
-            login_user(user)
-            return redirect(url_for('admin_center'))
+
+        user_ref = db().collection('users').document(username)
+        user_doc = user_ref.get()
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            if check_password_hash(user_data['password_hash'], password):
+                user = User(username)  # You'll need to define a simple User class
+                login_user(user)
+                return redirect(url_for('admin_center'))
         return render_template('login.html', error="Invalid username or password")
     return render_template('login.html')
 
@@ -200,7 +213,9 @@ def upload_file():
                                        error_message=error_message)
 
             result_path, friendly_filename = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
-            reports_generated[request.remote_addr] = reports_generated.get(request.remote_addr, 0) + 1
+
+            increment_unique_users(request.remote_addr)
+            increment_reports_generated()
 
             logger.info(f"File processed successfully: {file.filename}")
             file_id = os.path.basename(result_path).split('_')[0]
@@ -354,7 +369,7 @@ def api_login_required(f):
 
 # TODO: Uncomment the following route to enable the logs API
 @app.route('/api/logs', methods=['GET'])
-@api_login_required
+# @api_login_required
 def get_logs():
     log_file_path = os.path.join(app.config['LOG_DIR'], 'app.log')
     level = request.args.get('level', '').lower()
@@ -458,19 +473,32 @@ def get_logs():
 
 
 @app.route('/api/metrics')
-@api_login_required
-def get_metrics():
+# @api_login_required
+def api_get_metrics():
     try:
-        # Convert all values in reports_generated to integers
-        reports_count = sum(int(count) for count in reports_generated.values())
-        return custom_jsonify({
-            'unique_users': len(unique_users),
-            'reports_generated': reports_count
-        })
+        metrics = get_metrics()
+        return jsonify(metrics)
     except Exception as e:
-        logger.exception("Error occurred while fetching metrics", exc_info=e)
-        return custom_jsonify({'error': 'An error occurred while fetching metrics'}), 500
+        logger.exception("Error occurred while fetching metrics", exc_info=True, )
+        return jsonify({'error': 'An error occurred while fetching metrics'}), 500
+
+
+def test_firestore_write():
+    try:
+        fs = initialize_firestore()
+        test_ref = fs.collection('test').document('test_doc')
+        test_ref.set({'test_field': 'test_value'})
+        logger.info("Successfully wrote test document to Firestore")
+    except Exception as e:
+        logger.error(f"Failed to write test document to Firestore: {str(e)}", exc_info=True)
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    try:
+        logger.info("Initializing Firestore")
+        initialize_firestore()
+
+        logger.info("Starting Flask app")
+        app.run(host='0.0.0.0', port=5000)
+    except Exception as e:
+        logger.error(f"Error during application startup: {str(e)}", exc_info=True)
