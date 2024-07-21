@@ -1,6 +1,7 @@
 from firebase_admin import firestore
 from firebase_config import initialize_firestore as db  # Assuming you have this import set up
 from utils.logger import get_logger
+from flask import jsonify
 
 logger = get_logger(__name__)
 
@@ -32,3 +33,19 @@ def get_metrics():
         'unique_users': unique_users_count,
         'reports_generated': reports_count
     }
+
+
+def reset_metrics():
+    db_instance = db()
+
+    # Reset unique users
+    unique_users_ref = db_instance.collection('metrics').document('unique_users')
+    unique_users_ref.set({})
+
+    # Reset reports generated
+    reports_ref = db_instance.collection('metrics').document('reports_generated')
+    reports_ref.set({
+        'count': 0
+    })
+
+    logger.info("Metrics reset successfully")

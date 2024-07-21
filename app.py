@@ -19,7 +19,7 @@ from functools import wraps
 from firebase_config import initialize_firestore
 from werkzeug.security import check_password_hash
 from models import User
-from metrics import increment_unique_users, increment_reports_generated
+from metrics import increment_unique_users, increment_reports_generated, reset_metrics
 from metrics import get_metrics as get_metrics
 from firebase_config import initialize_firestore as db
 import os
@@ -481,6 +481,17 @@ def api_get_metrics():
     except Exception as e:
         logger.exception("Error occurred while fetching metrics", exc_info=True, )
         return jsonify({'error': 'An error occurred while fetching metrics'}), 500
+
+
+@app.route('/api/reset_metrics', methods=['POST'])
+@api_login_required
+def api_reset_metrics():
+    try:
+        reset_metrics()
+        return jsonify({"message": "Metrics reset successfully"}), 200
+    except Exception as e:
+        logger.exception("Error occurred while resetting metrics", exc_info=True)
+        return jsonify({"error": "Failed to reset metrics"}), 500
 
 
 def test_firestore_write():

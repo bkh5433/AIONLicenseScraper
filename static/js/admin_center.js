@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     fetchMetrics();
 
+    // Uncomment the line below to enable automatic metrics refresh every 30 seconds
+    // setInterval(fetchMetrics, 30000);
+
     function fetchLogs(append = false) {
         if (isLoading) return;
 
@@ -132,6 +135,33 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     fetchLogs(false);
+
+    const resetMetricsBtn = document.getElementById('reset-metrics-btn');
+
+    resetMetricsBtn.addEventListener('click', function () {
+        if (confirm('Are you sure you want to reset the metrics? This action cannot be undone.')) {
+            fetch('/api/reset_metrics', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        alert(data.message);
+                        // Refresh the metrics display
+                        fetchMetrics();
+                    } else {
+                        throw new Error(data.error || 'Unknown error occurred');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to reset metrics. Please try again.');
+                });
+        }
+    });
 });
 
 function handleUnauthorized() {
