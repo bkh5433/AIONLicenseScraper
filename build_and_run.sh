@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e  # Exit immediately if a command exits with a non-zero status.
+
 # build_and_run.sh
 #
 # This script manages the build and deployment process for the AION License Count application.
@@ -39,7 +41,7 @@ VERSION=$(git describe --tags --always --dirty)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 BUILD_DATE=$(TZ=EST5EDT date +"%Y-%m-%dT%H:%M")
 BUILD="$current_date.$new_build"
-SECRET_KEY=$(python -c "import os; print(os.urandom(24).hex())")
+SECRET_KEY=$(openssl rand -hex 24)  # Use openssl instead of Python
 
 # Export the variables
 export VERSION
@@ -66,7 +68,6 @@ echo "{
   \"build\": \"$BUILD\",
   \"environment\": \"$environment\",
   \"secret_key\": \"$SECRET_KEY\"
-
 }" > version.json
 
 # Parse command line arguments
@@ -74,8 +75,8 @@ REBUILD=false
 PRUNE=false
 
 echo "Stopping and removing existing containers..."
-if docker-compose ps -q | grep -q .; then
-    docker-compose down -v
+if docker-compose ps --quiet 2>/dev/null | grep -q .; then
+    docker-compose down --volumes
     echo "Containers stopped and removed."
 else
     echo "No running containers found."
@@ -94,7 +95,7 @@ done
 # Prune Docker images if requested
 if [ "$PRUNE" = true ]; then
     echo "Pruning dangling images..."
-    docker image prune -f
+    docker image prune --force
 fi
 
 # Rebuild Docker images if requested
@@ -104,6 +105,6 @@ if [ "$REBUILD" = true ]; then
 fi
 
 echo "Starting or updating containers..."
-docker-compose up -d --build
+docker-compose up --detach --build
 
 echo "Operation completed."

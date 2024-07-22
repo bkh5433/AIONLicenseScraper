@@ -5,19 +5,60 @@ This module sets up the Flask application, defines routes, and handles
 file uploads, processing, and downloads.
 """
 
-from flask import render_template, request, redirect, url_for, send_from_directory, jsonify, session, Response
+from flask import render_template, request, redirect, url_for, session, Response
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from flask.json import jsonify
 from csv_parser import process_file, generate_summary
 from create_app import app
 from utils.validation import validate_csv
 from utils.logger import setup_logging, get_logger
 from utils.version_info import get_version_info
+from datetime import datetime, timezone
+from collections import Counter
+from functools import wraps
+from firebase_config import initialize_firestore
+from werkzeug.security import check_password_hash
+from models import User
+from metrics import increment_unique_users, increment_reports_generated, reset_metrics
+from metrics import get_metrics as get_metrics
+from firebase_config import initialize_firestore as db
 import os
 import json
 import time
-import datetime
 
 setup_logging()
 logger = get_logger(__name__)
+unique_users = set()
+reports_generated = Counter()
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+def custom_jsonify(*args, **kwargs):
+    return app.response_class(
+        json.dumps(dict(*args, **kwargs), cls=CustomJSONEncoder),
+        mimetype='application/json'
+    )
+
+
+app.json_encoder = CustomJSONEncoder
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    user_doc = db().collection('users').document(user_id).get()
+    if user_doc.exists:
+        return User(user_id)
+    return None
 
 
 @app.context_processor
@@ -29,6 +70,39 @@ def inject_version():
           dict: A dictionary containing version information.
       """
     return dict(version_info=get_version_info())
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    try:
+        logger.info("Initializing Firestore")
+        initialize_firestore()
+
+        logger.info("Admin user initialization completed")
+    except Exception as e:
+        logger.error(f"Error fetching admin user: {str(e)}", exc_info=True)
+
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        user_ref = db().collection('users').document(username)
+        user_doc = user_ref.get()
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            if check_password_hash(user_data['password_hash'], password):
+                user = User(username)  # You'll need to define a simple User class
+                login_user(user)
+                return redirect(url_for('admin_center'))
+        return render_template('login.html', error="Invalid username or password")
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
 
 
 @app.errorhandler(404)
@@ -103,7 +177,9 @@ def upload_file():
        Returns:
            str: Redirects to the summary page on success, or renders an error page on failure.
        """
+    global unique_users, reports_generated
     start_time = time.time()
+    unique_users.add(request.headers.get('X-Forwarded-For', request.remote_addr))
 
     try:
         if 'file' not in request.files:
@@ -137,6 +213,10 @@ def upload_file():
                                        error_message=error_message)
 
             result_path, friendly_filename = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
+
+            increment_unique_users(request.headers.get('X-Forwarded-For', request.remote_addr))
+            increment_reports_generated()
+
             logger.info(f"File processed successfully: {file.filename}")
             file_id = os.path.basename(result_path).split('_')[0]
             if file_id:
@@ -234,6 +314,8 @@ def show_summary(filename):
 
 @app.route('/cleanup_undownloaded', methods=['POST'])
 def cleanup_undownloaded():
+    import datetime
+
     current_time = datetime.datetime.now().strftime("%H:%M:%S")
     logger.info(f"Cleanup process initiated at {current_time}")
     file_id = session.get('pending_file_id')
@@ -261,63 +343,176 @@ def cleanup_undownloaded():
     return '', 204
 
 
+@app.route('/admin')
+@login_required
+def admin_center():
+    return render_template('admin_center.html')
+
+
 @app.route('/check_session')
 def check_session():
-    return jsonify({
+    return custom_jsonify({
         'pending_file_id': session.get('pending_file_id'),
         'friendly_filename': session.get('friendly_filename')
     })
 
 
+def api_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return custom_jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
 # TODO: Uncomment the following route to enable the logs API
-# @app.route('/api/logs', methods=['GET'])
+@app.route('/api/logs', methods=['GET'])
+@api_login_required
 def get_logs():
     log_file_path = os.path.join(app.config['LOG_DIR'], 'app.log')
-    invalid_lines = 0
-    try:
-        logs = []
-        invalid = []
+    level = request.args.get('level', '').lower()
+    search = request.args.get('search', '').lower()
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    http_method = request.args.get('http_method', '').upper()
+    exclude_api = request.args.get('exclude_api', 'false').lower() == 'true'
+    ip_address = request.args.get('ip_address', '')
+    path = request.args.get('path', '')
+    user_agent = request.args.get('user_agent', '')
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 50))
 
-        with open(log_file_path, 'r') as log_file:
-            for line in log_file:
+    def parse_timestamp(timestamp):
+        if isinstance(timestamp, datetime):
+            return timestamp.replace(tzinfo=timezone.utc) if timestamp.tzinfo is None else timestamp
+        elif isinstance(timestamp, str):
+            timestamp = timestamp.rstrip('Z')  # Remove trailing 'Z' if present
+            try:
+                return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
+            except ValueError:
                 try:
-                    log_entry = json.loads(line.strip())
-                    logs.append(log_entry)
-                except json.JSONDecodeError:
-                    invalid_lines += 1
-                    invalid.append(line)
-                    # Skip invalid JSON lines
-                    continue
+                    return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+                except ValueError:
+                    return datetime.min.replace(tzinfo=timezone.utc)
+        else:
+            return datetime.min.replace(tzinfo=timezone.utc)
 
-        # Filter logs based on query parameters
-        level = request.args.get('level')
-        if level:
-            logs = [log for log in logs if log.get('level') == level.lower()]
+    all_logs = []
+    with open(log_file_path, 'r') as log_file:
+        for line in log_file:
+            try:
+                log_entry = json.loads(line.strip())
+            except json.JSONDecodeError:
+                log_entry = {
+                    "level": "ERROR",
+                    "event": line.strip(),
+                    "timestamp": datetime.now().isoformat()
+                }
 
-        # Filter by event
-        event = request.args.get('event')
-        if event:
-            logs = [log for log in logs if event.lower() in log.get('event', '').lower()]
+            log_entry['parsed_timestamp'] = parse_timestamp(log_entry.get('timestamp', ''))
+            all_logs.append(log_entry)
 
-        # Filter by time range
-        start_time = request.args.get('start_time')
-        end_time = request.args.get('end_time')
-        if start_time:
-            logs = [log for log in logs if log.get('timestamp', '') >= start_time]
-        if end_time:
-            logs = [log for log in logs if log.get('timestamp', '') <= end_time]
+    # Sort all logs by timestamp in descending order
+    all_logs.sort(key=lambda x: parse_timestamp(x.get('timestamp', '')), reverse=True)
 
-        # Get the last n lines
-        limit = request.args.get('limit', type=int)
-        if limit:
-            logs = logs[-limit:]
+    # Apply filters
+    filtered_logs = []
+    for log in all_logs:
+        if (not level or log.get('level', '').lower() == level) and \
+                (not start_date or parse_timestamp(log.get('timestamp', '')) >= parse_timestamp(start_date)) and \
+                (not end_date or parse_timestamp(log.get('timestamp', '')) <= parse_timestamp(end_date)) and \
+                (not http_method or log.get('method', '').upper() == http_method) and \
+                (not ip_address or log.get('ip', '') == ip_address) and \
+                (not path or path in log.get('path', '')) and \
+                (not user_agent or user_agent in log.get('user_agent', '')) and \
+                (not exclude_api or not log.get('path', '').startswith('/api/')):
 
-        return jsonify({'logs': logs}), 200
-    except FileNotFoundError:
-        return jsonify({'error': 'Log file not found'}), 404
+            log_copy = log.copy()
+            for key, value in log_copy.items():
+                if isinstance(value, datetime):
+                    log_copy[key] = value.isoformat()
+
+            if not search or search.lower() in json.dumps(log_copy, cls=CustomJSONEncoder).lower():
+                filtered_logs.append(log_copy)
+
+    # Calculate pagination
+    total_logs = len(filtered_logs)
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_logs = filtered_logs[start:end]
+
+    # Prepare logs for output
+    for log in paginated_logs:
+        log['timestamp'] = parse_timestamp(log.get('timestamp', '')).isoformat()
+        if 'parsed_timestamp' in log:
+            del log['parsed_timestamp']
+        if 'event' not in log and 'message' in log:
+            log['event'] = log['message']
+        if 'event' not in log:
+            log['event'] = 'No event provided'
+        if 'level' not in log:
+            log['level'] = 'INFO'
+        for key, value in log.items():
+            if not isinstance(value, (str, int, float, bool, type(None))):
+                log[key] = str(value)
+
+    return custom_jsonify({
+        'logs': paginated_logs,
+        'total': total_logs,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': (total_logs + per_page - 1) // per_page
+    })
+
+
+@app.route('/api/metrics')
+@api_login_required
+def api_get_metrics():
+    try:
+        metrics = get_metrics()
+        return jsonify(metrics)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.exception("Error occurred while fetching metrics", exc_info=e)
+        return jsonify({'error': 'An error occurred while fetching metrics'}), 500
+
+
+@app.route('/api/reset_metrics', methods=['POST'])
+@api_login_required
+def api_reset_metrics():
+    try:
+        reset_metrics()
+        return jsonify({"message": "Metrics reset successfully"}), 200
+    except Exception as e:
+        logger.exception("Error occurred while resetting metrics", exc_info=True)
+        return jsonify({"error": "Failed to reset metrics"}), 500
+
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Log the exception
+    logger.exception("Unhandled exception occurred")
+    # Return an error page with the exception message
+    return render_template('error.html', error_message=str(e)), 500
+
+
+@app.route('/test-exception')
+def test_exception():
+    logger = get_logger(__name__)
+    try:
+        raise ValueError("This is a test exception")
+    except Exception as e:
+        logger.exception("An error occurred in the test route")
+        raise
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    try:
+        logger.info("Initializing Firestore")
+        initialize_firestore()
+
+        logger.info("Starting Flask app")
+        app.run(host='0.0.0.0', port=5000)
+    except Exception as e:
+        logger.error(f"Error during application startup: {str(e)}", exc_info=True)

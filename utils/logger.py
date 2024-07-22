@@ -10,6 +10,7 @@ import logging
 import os
 from flask import request, has_request_context
 from logging.handlers import RotatingFileHandler
+from pythonjsonlogger import jsonlogger
 from create_app import app
 
 # Get the log directory from the app configuration
@@ -42,12 +43,32 @@ def add_request_info(_, __, event_dict):
             dict: The event dictionary with added request information
         """
     if has_request_context():
-        event_dict["ip"] = request.remote_addr
+        event_dict["ip"] = request.headers.get('X-Forwarded-For', request.remote_addr)
         event_dict["user_agent"] = request.headers.get("User-Agent", "-")
         event_dict["path"] = request.path
         event_dict["method"] = request.method
 
     return event_dict
+
+
+class CustomJsonFormatter(jsonlogger.JsonFormatter):
+    def add_fields(self, log_record, record, message_dict):
+        super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
+
+        if not log_record.get('timestamp'):
+            log_record['timestamp'] = self.formatTime(record)
+        if log_record.get('level'):
+            log_record['level'] = record.levelname
+        else:
+            log_record['level'] = record.levelname
+        if record.exc_info:
+            log_record['exception'] = self.formatException(record.exc_info)
+        elif record.exc_text:
+            log_record['exception'] = record.exc_text
+
+    def formatException(self, exc_info):
+        formatted = super().formatException(exc_info)
+        return formatted.replace("\n", "\\n").replace("\r", "\\r")
 
 
 def setup_logging():
@@ -61,12 +82,19 @@ def setup_logging():
     # Ensure the log directory exists
     os.makedirs(LOG_DIR, exist_ok=True)
 
+    json_formatter = CustomJsonFormatter('%(timestamp)s %(level)s %(name)s %(message)s')
+
     # Set up a rotating file handler
     file_handler = RotatingFileHandler(
         os.path.join(LOG_DIR, "app.log"),
         maxBytes=5000000,  # 5 MB
         backupCount=2
     )
+    file_handler.setFormatter(json_formatter)
+
+    console_handler = logging.StreamHandler()
+    console_format = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+    console_handler.setFormatter(console_format)
 
     # Set up a console handler
     console_handler = logging.StreamHandler()
@@ -75,17 +103,16 @@ def setup_logging():
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
+            structlog.stdlib.filter_by_level,
             structlog.processors.add_log_level,
             structlog.processors.StackInfoRenderer(),
             structlog.dev.set_exc_info,
             structlog.processors.TimeStamper(fmt="iso"),
             add_request_info,
-            structlog.processors.dict_tracebacks,
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
-        context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
 
@@ -109,4 +136,5 @@ def get_logger(name):
         Returns:
             structlog.BoundLogger: A structured logger instance.
         """
+
     return structlog.get_logger(name)

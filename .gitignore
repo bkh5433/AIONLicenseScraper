@@ -40,3 +40,5 @@ build/
 logs/
 /output/
 /uploads/
+
+create_admin_user.py
