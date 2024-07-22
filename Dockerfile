@@ -1,14 +1,18 @@
 # Dockerfile for AION License Count application
 
 # Use Python 3.12.3 with Alpine 3.20 as the base image
-FROM python:3.12.3-alpine3.20
+FROM python:3.12-bullseye
 
 
 # Set the working directory in the container
 WORKDIR /app
 
+# Install build dependencies
+#RUN apk add --no-cache gcc g++ python3-dev musl-dev linux-headers
+
 # Copy the requirements file into the container
 COPY requirements.txt .
+
 
 # Install the Python dependencies
 RUN pip install -r requirements.txt
