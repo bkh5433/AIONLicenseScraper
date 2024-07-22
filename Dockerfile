@@ -1,7 +1,7 @@
 # Dockerfile for AION License Count application
 
 # Use Python 3.12.3 with Alpine 3.20 as the base image
-FROM python:3.12-bullseye
+FROM python:3.12.3-bullseye
 
 
 # Set the working directory in the container
