@@ -179,7 +179,7 @@ def upload_file():
        """
     global unique_users, reports_generated
     start_time = time.time()
-    unique_users.add(request.remote_addr)
+    unique_users.add(request.headers.get('X-Forwarded-For', request.remote_addr))
 
     try:
         if 'file' not in request.files:
@@ -214,7 +214,7 @@ def upload_file():
 
             result_path, friendly_filename = process_file(file_path, int(cost_per_user), int(cost_per_exchange))
 
-            increment_unique_users(request.remote_addr)
+            increment_unique_users(request.headers.get('X-Forwarded-For', request.remote_addr))
             increment_reports_generated()
 
             logger.info(f"File processed successfully: {file.filename}")
@@ -384,17 +384,20 @@ def get_logs():
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 50))
 
-    def parse_timestamp(timestamp_str):
-        if isinstance(timestamp_str, str):
-            timestamp_str = timestamp_str.rstrip('Z')  # Remove trailing 'Z' if present
+    def parse_timestamp(timestamp):
+        if isinstance(timestamp, datetime):
+            return timestamp.replace(tzinfo=timezone.utc) if timestamp.tzinfo is None else timestamp
+        elif isinstance(timestamp, str):
+            timestamp = timestamp.rstrip('Z')  # Remove trailing 'Z' if present
             try:
-                return datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
+                return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f").replace(tzinfo=timezone.utc)
             except ValueError:
                 try:
-                    return datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+                    return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
                 except ValueError:
-                    return timestamp_str  # Return the original string if parsing fails
-        return timestamp_str  # Return as-is if it's not a string (e.g., already a datetime object)
+                    return datetime.min.replace(tzinfo=timezone.utc)
+        else:
+            return datetime.min.replace(tzinfo=timezone.utc)
 
     all_logs = []
     with open(log_file_path, 'r') as log_file:
@@ -412,19 +415,14 @@ def get_logs():
             all_logs.append(log_entry)
 
     # Sort all logs by timestamp in descending order
-    all_logs.sort(key=lambda x: x['parsed_timestamp'] if isinstance(x['parsed_timestamp'], datetime) else datetime.min,
-                  reverse=True)
+    all_logs.sort(key=lambda x: parse_timestamp(x.get('timestamp', '')), reverse=True)
 
     # Apply filters
     filtered_logs = []
     for log in all_logs:
         if (not level or log.get('level', '').lower() == level) and \
-                (not start_date or (
-                        isinstance(log['parsed_timestamp'], datetime) and log['parsed_timestamp'] >= parse_timestamp(
-                    start_date))) and \
-                (not end_date or (
-                        isinstance(log['parsed_timestamp'], datetime) and log['parsed_timestamp'] <= parse_timestamp(
-                    end_date))) and \
+                (not start_date or parse_timestamp(log.get('timestamp', '')) >= parse_timestamp(start_date)) and \
+                (not end_date or parse_timestamp(log.get('timestamp', '')) <= parse_timestamp(end_date)) and \
                 (not http_method or log.get('method', '').upper() == http_method) and \
                 (not ip_address or log.get('ip', '') == ip_address) and \
                 (not path or path in log.get('path', '')) and \
@@ -447,11 +445,8 @@ def get_logs():
 
     # Prepare logs for output
     for log in paginated_logs:
+        log['timestamp'] = parse_timestamp(log.get('timestamp', '')).isoformat()
         if 'parsed_timestamp' in log:
-            if isinstance(log['parsed_timestamp'], datetime):
-                log['timestamp'] = log['parsed_timestamp'].isoformat()
-            else:
-                log['timestamp'] = log['parsed_timestamp']
             del log['parsed_timestamp']
         if 'event' not in log and 'message' in log:
             log['event'] = log['message']

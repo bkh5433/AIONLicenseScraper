@@ -43,7 +43,7 @@ def add_request_info(_, __, event_dict):
             dict: The event dictionary with added request information
         """
     if has_request_context():
-        event_dict["ip"] = request.remote_addr
+        event_dict["ip"] = request.headers.get('X-Forwarded-For', request.remote_addr)
         event_dict["user_agent"] = request.headers.get("User-Agent", "-")
         event_dict["path"] = request.path
         event_dict["method"] = request.method
@@ -54,6 +54,7 @@ def add_request_info(_, __, event_dict):
 class CustomJsonFormatter(jsonlogger.JsonFormatter):
     def add_fields(self, log_record, record, message_dict):
         super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
+
         if not log_record.get('timestamp'):
             log_record['timestamp'] = self.formatTime(record)
         if log_record.get('level'):
@@ -102,17 +103,16 @@ def setup_logging():
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
+            structlog.stdlib.filter_by_level,
             structlog.processors.add_log_level,
             structlog.processors.StackInfoRenderer(),
             structlog.dev.set_exc_info,
             structlog.processors.TimeStamper(fmt="iso"),
             add_request_info,
-            structlog.processors.dict_tracebacks,
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
-        context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
 
@@ -136,20 +136,5 @@ def get_logger(name):
         Returns:
             structlog.BoundLogger: A structured logger instance.
         """
-    logger = logging.getLogger(name)
-    return structlog.wrap_logger(
-        logger,
-        processors=[
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
-            structlog.stdlib.render_to_log_kwargs,
-        ],
-        context_class=dict,
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
+
+    return structlog.get_logger(name)
