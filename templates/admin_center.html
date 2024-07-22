@@ -4,28 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AION License Count Admin Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_center.css') }}">
 </head>
 <body>
 <div class="container">
-    <h1>AION License Count Admin Center</h1>
-    <div class="user-info">
-        Logged in as: {{ current_user.id }}
-        <a href="{{ url_for('logout') }}">Logout</a>
-    </div>
-    <div class="metrics">
-        <div class="metric">
-            <h2>Unique Users</h2>
-            <p id="unique-users-count">Loading...</p>
+    <header>
+        <div class="logo-container">
+            <img src="{{ url_for('static', filename='images/logo_round.png') }}" alt="AION Logo" class="logo">
+            <h1>License Count Admin Center</h1>
         </div>
-        <div class="metric">
-            <h2>Reports Generated</h2>
-            <p id="reports-generated-count">Loading...</p>
+        <div class="user-info">
+            <i class="fas fa-user-circle"></i>
+            <span>{{ current_user.id }}</span>
+            <a href="{{ url_for('logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
-    </div>
-    <div id="logs-container" class="logs-container">
-        <h2>Application Logs</h2>
+    </header>
 
+    <div class="dashboard">
+        <div class="metrics">
+            <div class="metric-card">
+                <i class="fas fa-users"></i>
+                <h2>Unique Users</h2>
+                <p id="unique-users-count" class="metric-value">Loading...</p>
+            </div>
+            <div class="metric-card">
+                <i class="fas fa-file-alt"></i>
+                <h2>Reports Generated</h2>
+                <p id="reports-generated-count" class="metric-value">Loading...</p>
+            </div>
+        </div>
+        <div class="metrics-control">
+            <button id="reset-metrics-btn" class="action-btn"><i class="fas fa-redo"></i> Reset Metrics</button>
+        </div>
+    </div>
+
+    <div class="logs-section">
+        <h2><i class="fas fa-clipboard-list"></i> Application Logs</h2>
         <div class="log-filters">
             <select id="log-level">
                 <option value="">All Levels</option>
@@ -33,33 +49,29 @@
                 <option value="warning">Warning</option>
                 <option value="error">Error</option>
             </select>
+            <input type="text" id="log-search" placeholder="Search logs...">
             <select id="http-method">
                 <option value="">All Methods</option>
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
             </select>
-            {#        <input type="text" id="log-search" placeholder="Search logs...">#}
-            <label>
-                <input type="checkbox" id="exclude-api" checked>
+            <label class="checkbox-container">
+                <input type="checkbox" id="exclude-api">
+                <span class="checkmark"></span>
                 Exclude API calls
             </label>
-            <button id="apply-filters">Apply Filters</button>
+            <button id="apply-filters" class="action-btn"><i class="fas fa-filter"></i> Apply Filters</button>
         </div>
-
-        <div id="logs-output"></div>
-
-        <div id="load-more-container" style="text-align: center; margin-top: 20px;">
-            <button id="load-more-logs">Load More Logs</button>
+        <div class="logs-container">
+            <div id="logs-output"></div>
+            <div id="loading-indicator">Loading logs...</div>
         </div>
-
-        <div id="loading-indicator" style="display: none;">
-            Loading logs...
+        <div id="load-more-container">
+            <button id="load-more-logs" class="action-btn"><i class="fas fa-chevron-down"></i> Load More Logs</button>
         </div>
     </div>
 </div>
-<div class="metrics-control">
-    <button id="reset-metrics-btn" class="btn btn-warning">Reset Metrics</button>
-</div>
+
 <script src="{{ url_for('static', filename='js/admin_center.js') }}"></script>
 </body>
 </html>

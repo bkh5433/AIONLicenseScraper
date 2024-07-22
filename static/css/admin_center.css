@@ -1,81 +1,215 @@
-body {
-    font-family: Arial, sans-serif;
-    line-height: 1.6;
+:root {
+    --primary-color: #4a90e2;
+    --secondary-color: #2c3e50;
+    --background-color: #f4f7f9;
+    --card-background: #ffffff;
+    --text-color: #333333;
+    --border-radius: 8px;
+    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --transition: all 0.3s ease;
+}
+
+* {
     margin: 0;
     padding: 0;
-    background-color: #f4f4f4;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    line-height: 1.6;
+    background-color: var(--background-color);
+    color: var(--text-color);
 }
 
 .container {
-    width: 80%;
-    margin: auto;
-    overflow: hidden;
+    max-width: 1200px;
+    margin: 0 auto;
     padding: 20px;
 }
 
-h1, h2 {
-    color: #333;
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: var(--card-background);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+}
+
+.logo {
+    width: 50px;
+    height: auto;
+    margin-right: 15px;
+}
+
+h1 {
+    font-size: 1.8em;
+    color: var(--secondary-color);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+}
+
+.user-info i {
+    font-size: 1.5em;
+    margin-right: 10px;
+    color: var(--primary-color);
+}
+
+.logout-btn {
+    display: inline-block;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 8px 15px;
+    border-radius: var(--border-radius);
+    text-decoration: none;
+    margin-left: 15px;
+    transition: var(--transition);
+}
+
+.logout-btn:hover {
+    background-color: #3a7bc0;
+}
+
+.dashboard {
+    margin-bottom: 30px;
 }
 
 .metrics {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 20px;
+    gap: 20px;
 }
 
-.metric {
-    background: #fff;
+.metric-card {
+    background-color: var(--card-background);
     padding: 20px;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    width: 45%;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    flex: 1;
+    text-align: center;
+    transition: var(--transition);
 }
 
-.logs-container {
-    background: #fff;
+.metric-card:hover {
+    transform: translateY(-5px);
+}
+
+.metric-card i {
+    font-size: 2.5em;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.metric-value {
+    font-size: 2.5em;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.logs-section {
+    background-color: var(--card-background);
     padding: 20px;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    max-height: 600px;
-    overflow-y: auto;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
 }
 
 .log-filters {
-    margin-bottom: 10px;
-    position: sticky; /* Keep filters visible when scrolling */
-    top: 0;
-    background: #fff;
-    padding: 10px 0;
-    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
-#log-level, #log-search {
-    padding: 5px;
-    margin-right: 10px;
+#log-level, #log-search, #http-method {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
 }
 
-#logs-output {
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.checkbox-container input {
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.checkmark {
+    height: 20px;
+    width: 20px;
+    background-color: #eee;
+    border-radius: 4px;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.checkbox-container:hover input ~ .checkmark {
+    background-color: #ccc;
+}
+
+.checkbox-container input:checked ~ .checkmark {
+    background-color: var(--primary-color);
+}
+
+.checkmark:after {
+    content: "\2714";
+    display: none;
+    color: white;
+}
+
+.checkbox-container input:checked ~ .checkmark:after {
+    display: block;
+}
+
+.logs-container {
+    max-height: 500px;
+    overflow-y: auto;
     border: 1px solid #ddd;
     padding: 10px;
-    background-color: #f9f9f9;
+    border-radius: var(--border-radius);
 }
 
 .log-entry {
     margin-bottom: 10px;
-    padding: 5px;
-    border-left: 4px solid;
+    padding: 10px;
+    border-radius: var(--border-radius);
+    background-color: #f9f9f9;
+    transition: var(--transition);
+}
+
+.log-entry:hover {
+    transform: translateX(5px);
 }
 
 .log-entry.info {
-    border-color: #4CAF50;
+    border-left: 4px solid #4CAF50;
 }
 
 .log-entry.warning {
-    border-color: #FFC107;
+    border-left: 4px solid #FFC107;
 }
 
 .log-entry.error {
-    border-color: #F44336;
+    border-left: 4px solid #F44336;
 }
 
 .log-timestamp {
@@ -84,20 +218,8 @@ h1, h2 {
 }
 
 .log-level {
-    font-weight: bold;
+    font-weight: 600;
     margin-right: 10px;
-}
-
-.log-level.info {
-    color: #4CAF50;
-}
-
-.log-level.warning {
-    color: #FFC107;
-}
-
-.log-level.error {
-    color: #F44336;
 }
 
 .log-event {
@@ -118,6 +240,7 @@ h1, h2 {
     margin-top: 5px;
     white-space: pre-wrap;
     word-wrap: break-word;
+    border-radius: var(--border-radius);
 }
 
 #loading-indicator {
@@ -125,29 +248,38 @@ h1, h2 {
     padding: 10px;
     font-style: italic;
     color: #666;
-    position: sticky;
-    bottom: 0;
-    background: #f9f9f9;
-    border-top: 1px solid #ddd;
 }
 
-.metrics-control {
+.metrics-control, #load-more-container {
     margin-top: 20px;
-    padding: 20px;
-    background-color: #f8f9fa;
-    border-radius: 5px;
+    text-align: center;
 }
 
-#reset-metrics-btn {
-    padding: 10px 20px;
-    background-color: #ffc107;
-    color: #000;
+.action-btn {
+    background-color: var(--primary-color);
+    color: white;
     border: none;
-    border-radius: 5px;
+    padding: 10px 20px;
+    border-radius: var(--border-radius);
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: var(--transition);
+    font-size: 0.9em;
 }
 
-#reset-metrics-btn:hover {
-    background-color: #ffca2c;
+.action-btn:hover {
+    background-color: #3a7bc0;
+}
+
+@media (max-width: 768px) {
+    .metrics {
+        flex-direction: column;
+    }
+
+    .log-filters {
+        flex-direction: column;
+    }
+
+    .log-filters > * {
+        width: 100%;
+    }
 }

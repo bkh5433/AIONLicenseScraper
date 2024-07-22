@@ -55,13 +55,19 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
     def add_fields(self, log_record, record, message_dict):
         super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
         if not log_record.get('timestamp'):
-            log_record['timestamp'] = record.created
+            log_record['timestamp'] = self.formatTime(record)
         if log_record.get('level'):
             log_record['level'] = record.levelname
         else:
             log_record['level'] = record.levelname
-        if 'exc_info' in log_record:
+        if record.exc_info:
             log_record['exception'] = self.formatException(record.exc_info)
+        elif record.exc_text:
+            log_record['exception'] = record.exc_text
+
+    def formatException(self, exc_info):
+        formatted = super().formatException(exc_info)
+        return formatted.replace("\n", "\\n").replace("\r", "\\r")
 
 
 def setup_logging():
@@ -75,12 +81,19 @@ def setup_logging():
     # Ensure the log directory exists
     os.makedirs(LOG_DIR, exist_ok=True)
 
+    json_formatter = CustomJsonFormatter('%(timestamp)s %(level)s %(name)s %(message)s')
+
     # Set up a rotating file handler
     file_handler = RotatingFileHandler(
         os.path.join(LOG_DIR, "app.log"),
         maxBytes=5000000,  # 5 MB
         backupCount=2
     )
+    file_handler.setFormatter(json_formatter)
+
+    console_handler = logging.StreamHandler()
+    console_format = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+    console_handler.setFormatter(console_format)
 
     # Set up a console handler
     console_handler = logging.StreamHandler()
@@ -123,4 +136,20 @@ def get_logger(name):
         Returns:
             structlog.BoundLogger: A structured logger instance.
         """
-    return structlog.get_logger(name)
+    logger = logging.getLogger(name)
+    return structlog.wrap_logger(
+        logger,
+        processors=[
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.UnicodeDecoder(),
+            structlog.stdlib.render_to_log_kwargs,
+        ],
+        context_class=dict,
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )

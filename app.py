@@ -369,7 +369,7 @@ def api_login_required(f):
 
 # TODO: Uncomment the following route to enable the logs API
 @app.route('/api/logs', methods=['GET'])
-# @api_login_required
+@api_login_required
 def get_logs():
     log_file_path = os.path.join(app.config['LOG_DIR'], 'app.log')
     level = request.args.get('level', '').lower()
@@ -473,13 +473,13 @@ def get_logs():
 
 
 @app.route('/api/metrics')
-# @api_login_required
+@api_login_required
 def api_get_metrics():
     try:
         metrics = get_metrics()
         return jsonify(metrics)
     except Exception as e:
-        logger.exception("Error occurred while fetching metrics", exc_info=True, )
+        logger.exception("Error occurred while fetching metrics", exc_info=e)
         return jsonify({'error': 'An error occurred while fetching metrics'}), 500
 
 
@@ -494,14 +494,22 @@ def api_reset_metrics():
         return jsonify({"error": "Failed to reset metrics"}), 500
 
 
-def test_firestore_write():
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Log the exception
+    logger.exception("Unhandled exception occurred")
+    # Return an error page with the exception message
+    return render_template('error.html', error_message=str(e)), 500
+
+
+@app.route('/test-exception')
+def test_exception():
+    logger = get_logger(__name__)
     try:
-        fs = initialize_firestore()
-        test_ref = fs.collection('test').document('test_doc')
-        test_ref.set({'test_field': 'test_value'})
-        logger.info("Successfully wrote test document to Firestore")
+        raise ValueError("This is a test exception")
     except Exception as e:
-        logger.error(f"Failed to write test document to Firestore: {str(e)}", exc_info=True)
+        logger.exception("An error occurred in the test route")
+        raise
 
 
 if __name__ == '__main__':
