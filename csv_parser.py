@@ -1,18 +1,59 @@
+"""
+CSV Parser Module for AION License Count Application
+
+This module is responsible for processing CSV files containing Microsoft license data
+and generating detailed Excel reports with license counts and cost calculations.
+
+Key functionalities:
+1. Reading and cleaning CSV data
+2. Counting licenses per office and license type
+3. Categorizing users (AION Management, AION Partners, Properties, Unaccounted)
+4. Calculating costs based on license counts
+5. Generating a formatted Excel report with multiple sheets
+6. Creating a summary of license usage and costs
+
+The main entry point is the `process_file` function, which orchestrates the entire
+process from reading the input CSV to producing the final Excel report.
+
+This module is designed to work with the Flask web application, utilizing
+configuration settings and logging mechanisms defined in other parts of the project.
+
+Dependencies:
+- pandas: for data manipulation
+- openpyxl: for Excel file operations
+- utils.logger: for logging
+- create_app: for application configuration
+
+Note: This module assumes a specific structure for the input CSV file, including
+columns for 'Office', 'Licenses', 'User principal name', and 'Display name'.
+"""
+
 import pandas as pd
 import os
+import openpyxl
+import time
+import uuid
 from datetime import datetime
-import logging
+from utils.logger import get_logger
 from create_app import app
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def read_and_prepare_data(file_path):
-    """Read CSV file and prepare the DataFrame by stripping whitespaces from the 'Office' column."""
+    """
+    Read CSV file and prepare the DataFrame by stripping whitespaces from the 'Office' column.
+
+    Args:
+        file_path (str): Path to the CSV file.
+
+    Returns:
+        pandas.DataFrame or None: Prepared DataFrame if successful, None otherwise.
+    """
     try:
         df = pd.read_csv(file_path)
         df['Office'] = df['Office'].str.strip()
-        logger.info(f"Data read successfully from {file_path}")
+        logger.info(f"csv cleaned successfully from {file_path}")
         return df
     except FileNotFoundError:
         logger.error(f"File not found: {file_path}")
@@ -26,7 +67,16 @@ def read_and_prepare_data(file_path):
 
 
 def initialize_license_counts(df, target_licenses):
-    """Initialize the license counts dictionary based on unique 'Office' values and target licenses."""
+    """
+    Initialize the license counts dictionary based on unique 'Office' values and target licenses.
+
+    Args:
+        df (pandas.DataFrame): The input DataFrame.
+        target_licenses (dict): Dictionary of target license types.
+
+    Returns:
+        dict: Initialized license counts dictionary.
+    """
     license_counts = {office.strip(): {key: 0 for key in target_licenses.keys()}
                       for office in df['Office'].unique() if pd.notna(office) and office.strip()}
     license_counts['Unaccounted'] = {key: 0 for key in target_licenses.keys()}
@@ -35,8 +85,19 @@ def initialize_license_counts(df, target_licenses):
 
 
 def process_licenses(df, target_licenses, license_counts):
-    """Process each row in the DataFrame to count licenses and log specific organizations."""
-    unaccounted_log = []
+    """
+    Process each row in the DataFrame to count licenses and log specific organizations.
+
+    Args:
+        df (pandas.DataFrame): The input DataFrame.
+        target_licenses (dict): Dictionary of target license types.
+        license_counts (dict): Initialized license counts dictionary.
+
+    Returns:
+        tuple: Updated license_counts, unaccounted_users, aion_management, aion_partners, properties
+    """
+    logger.info("Processing licenses")
+    unaccounted_users = []
     aion_management = []
     aion_partners = []
     properties = []
@@ -45,36 +106,42 @@ def process_licenses(df, target_licenses, license_counts):
         office = row.get('Office')
         licenses = row.get('Licenses')
         user_principal_name = row.get('User principal name')
+        display_name = row.get('Display name')
 
         if pd.isna(licenses) or licenses.strip() == '':
             continue
 
         licenses_list = licenses.split('+')
-        has_target_license = False
 
         for license in licenses_list:
             license = license.strip()
 
             for key, variants in target_licenses.items():
                 if any(variant in license for variant in variants):
-                    has_target_license = True
                     license_counts[office if not (pd.isna(office) or office.strip() == '') else 'Unaccounted'][key] += 1
                     if office == 'AION Management':
-                        aion_management.append([row['Display name'], license, user_principal_name])
+                        aion_management.append([display_name, license, user_principal_name])
                     elif office == 'AION Partners':
-                        aion_partners.append([row['Display name'], license, user_principal_name])
+                        aion_partners.append([display_name, license, user_principal_name])
+                    elif pd.isna(office) or office.strip() == '':
+                        unaccounted_users.append([display_name, license, user_principal_name])
                     else:
-                        properties.append([row['Display name'], license, user_principal_name, office])
-
-        if (pd.isna(office) or office.strip() == '') and has_target_license:
-            unaccounted_log.append(f"{row['Display name']} ({user_principal_name})")
+                        properties.append([display_name, license, user_principal_name, office])
 
     logger.info("Processed licenses")
-    return license_counts, unaccounted_log, aion_management, aion_partners, properties
+    return license_counts, unaccounted_users, aion_management, aion_partners, properties
 
 
 def create_license_counts_df(license_counts):
-    """Convert the license counts dictionary to a DataFrame and calculate totals."""
+    """
+    Convert the license counts dictionary to a DataFrame and calculate totals.
+
+    Args:
+        license_counts (dict): License counts dictionary.
+
+    Returns:
+        pandas.DataFrame or None: DataFrame with license counts and totals if successful, None otherwise.
+    """
     try:
         license_counts_df = pd.DataFrame.from_dict(license_counts, orient='index').fillna(0)
         totals = license_counts_df.sum(axis=0).rename('Total')
@@ -86,15 +153,29 @@ def create_license_counts_df(license_counts):
         return None
 
 
-def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df,
+def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df, unaccounted_users,
                   cost_per_user, cost_per_exchange):
-    """Save the processed data to an Excel file with specific formatting."""
+    """
+       Save the processed data to an Excel file with specific formatting.
+
+       Args:
+           excel_path (str): Path to save the Excel file.
+           license_counts_df (pandas.DataFrame): DataFrame with license counts.
+           aion_management_df (pandas.DataFrame): DataFrame with AION Management data.
+           aion_partners_df (pandas.DataFrame): DataFrame with AION Partners data.
+           properties_df (pandas.DataFrame): DataFrame with Properties data.
+           unaccounted_users (pandas.DataFrame): DataFrame with unaccounted users' data.
+           cost_per_user (int): Cost per user.
+           cost_per_exchange (int): Cost per exchange license.
+       """
     try:
+        logger.info(f"writing data to Excel file: {excel_path}")
         with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
             license_counts_df.to_excel(writer, sheet_name='License Counts')
             aion_management_df.to_excel(writer, sheet_name='AION Management', index=False)
             aion_partners_df.to_excel(writer, sheet_name='AION Partners', index=False)
             properties_df.to_excel(writer, sheet_name='Properties', index=False)
+            unaccounted_users.to_excel(writer, sheet_name='Unaccounted Users', index=False)
 
             workbook = writer.book
             header_format = workbook.add_format(
@@ -148,6 +229,9 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
 
             properties_worksheet = writer.sheets['Properties']
             format_sheet(properties_worksheet, properties_df)
+
+            unaccounted_users_worksheet = writer.sheets['Unaccounted Users']
+            format_sheet(unaccounted_users_worksheet, unaccounted_users)
         logger.info(f"Data saved to Excel file: {excel_path}")
     except PermissionError:
         logger.error(f"Permission denied when writing to {excel_path}")
@@ -156,6 +240,19 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
 
 
 def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
+    """
+        Main function to process the CSV file and generate the Excel report.
+
+        Args:
+            file_path (str): Path to the input CSV file.
+            cost_per_user (int, optional): Cost per user. Defaults to 115.
+            cost_per_exchange (int, optional): Cost per exchange license. Defaults to 20.
+
+        Returns:
+            str or None: Path to the generated Excel file if successful, None otherwise.
+        """
+    logger.info(f"Processing file: {file_path}")
+    start_time = time.time()
     df = read_and_prepare_data(file_path)
     if df is None:
         return None
@@ -166,9 +263,9 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     }
 
     license_counts = initialize_license_counts(df, target_licenses)
-    license_counts, unaccounted_log, aion_management, aion_partners, properties = process_licenses(df,
-                                                                                                         target_licenses,
-                                                                                                         license_counts)
+    license_counts, unaccounted_users, aion_management, aion_partners, properties = process_licenses(df,
+                                                                                                     target_licenses,
+                                                                                                     license_counts)
 
     license_counts_df = create_license_counts_df(license_counts)
     if license_counts_df is None:
@@ -183,19 +280,106 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     aion_management_df = pd.DataFrame(aion_management, columns=['Display Name', 'License Type', 'User Principal Name'])
     aion_partners_df = pd.DataFrame(aion_partners, columns=['Display Name', 'License Type', 'User Principal Name'])
     properties_df = pd.DataFrame(properties,
-                                       columns=['Display Name', 'License Type', 'User Principal Name', 'Office'])
+                                 columns=['Display Name', 'License Type', 'User Principal Name', 'Office'])
+    unaccounted_users = pd.DataFrame(unaccounted_users, columns=['Display Name', 'License Type', 'User Principal Name'])
 
-    current_date = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-    excel_path = os.path.join(app.config['OUTPUT_FOLDER'], f"license_counts_{current_date}.xlsx")
+    current_date = datetime.now().strftime('%Y_%m_%d')
+    file_id = str(uuid.uuid4())
+    internal_filename = f"{file_id}_license_counts_{current_date}.xlsx"
+    friendly_filename = f"AION_License_Report_{current_date}.xlsx"
+    excel_path = os.path.join(app.config['OUTPUT_FOLDER'], internal_filename)
 
-    save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df,
+    save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df, unaccounted_users,
                   cost_per_user,
                   cost_per_exchange)
+    logger.info(f"Processed file saved to: {excel_path}")
 
     try:
         os.remove(file_path)
-        logger.info(f"Removed processed file: {file_path}")
+        logger.info(f"Removed uploaded file: {file_path}")
     except OSError as e:
-        logger.error(f"Error removing file {file_path}: {e}")
+        logger.error(f"Error removing uploaded {file_path}: {e}")
 
-    return excel_path
+    end_time = time.time()
+    processing_time = end_time - start_time
+    logger.info(f"CSV processing time: {processing_time:.2f} seconds")
+
+    return excel_path, friendly_filename
+
+
+def generate_summary(file_path):
+    """
+        Generate a summary of the license counts from the Excel file.
+
+        Args:
+            file_path (str): Path to the Excel file.
+
+        Returns:
+            dict: Summary statistics of the license counts.
+        """
+    workbook = openpyxl.load_workbook(file_path)
+    sheet = workbook['License Counts']
+
+    total_row = sheet.max_row
+    data = [
+        [sheet.cell(row=i, column=j).value for j in range(1, sheet.max_column + 1)]
+        for i in range(2, total_row)  # Skip header row
+    ]
+
+    summary = {
+        # Total number of 365 Premium licenses
+        'total_365_premium': sum(row[1] for row in data),
+
+        # Total number of Exchange licenses
+        'total_exchange': sum(row[2] for row in data),
+
+        # Total cost across all offices
+        'total_cost': sum(row[5] for row in data),
+
+        # Average cost per office
+        'avg_cost_per_office': sum(row[5] for row in data) / len(data),
+
+        # Highest cost among all offices
+        'highest_cost': max(row[5] for row in data),
+
+        # Name of the office with the highest cost
+        'highest_cost_office': next(row[0] for row in data if row[5] == max(r[5] for r in data)),
+
+        # Percentage of offices with both 365 Premium and Exchange licenses
+        'percent_both_licenses': sum(1 for row in data if row[1] > 0 and row[2] > 0) / len(data) * 100,
+
+        # Percentage of offices with only 365 Premium licenses
+        'percent_only_365': sum(1 for row in data if row[1] > 0 and row[2] == 0) / len(data) * 100,
+
+        # Percentage of offices with only Exchange licenses
+        'percent_only_exchange': sum(1 for row in data if row[1] == 0 and row[2] > 0) / len(data) * 100,
+
+        # Highest ratio of Exchange to 365 Premium licenses
+        'highest_exchange_ratio': max((row[2] / row[1] if row[1] > 0 else 0) for row in data),
+
+        # Name of the office with the highest Exchange to 365 Premium ratio
+        'highest_exchange_ratio_office': next(row[0] for row in data if (row[2] / row[1] if row[1] > 0 else 0) == max(
+            (r[2] / r[1] if r[1] > 0 else 0) for r in data)),
+
+        # Number of offices with no licenses
+        'offices_no_licenses': sum(1 for row in data if row[1] == 0 and row[2] == 0),
+
+        # Average number of licenses (both types) per office
+        'avg_licenses_per_office': (sum(row[1] for row in data) + sum(row[2] for row in data)) / len(data),
+
+        # Top 5 offices by cost, sorted in descending order
+        'top_offices_by_cost': sorted(
+            [(row[0], row[3], row[4], row[5]) for row in data],
+            key=lambda x: x[3],
+            reverse=True
+        )[:5],
+
+        # Top 5 offices by total number of licenses, sorted in descending order
+        'top_offices_by_license': sorted(
+            [(row[0], row[1], row[2], row[1] + row[2]) for row in data],
+            key=lambda x: x[3],
+            reverse=True
+        )[:5],
+    }
+
+    return summary

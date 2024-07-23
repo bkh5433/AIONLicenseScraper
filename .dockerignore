@@ -18,8 +18,7 @@ Thumbs.db
 # Ignore all markdown files
 *.md
 
-# Ignore all shell script files
-*.sh
+
 
 # Ignore all yaml files
 *.yml

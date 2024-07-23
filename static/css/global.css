@@ -1,0 +1,81 @@
+/*
+ * Version Badge Styles
+ *
+ * This CSS file defines the styles for the version badge component used in the
+ * AION License Count application. The version badge displays application version
+ * information in a compact, expandable format at the bottom-right corner of the page.
+ *
+ * Key features:
+ * - Fixed positioning at the bottom-right corner
+ * - Expandable on hover to show more details
+ * - Color-coded based on the recency of the version
+ * - Smooth transitions for a polished user experience
+ */
+
+/* Main container for the version badge */
+.version-badge {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    width: auto;
+    height: auto;
+    max-height: 20px; /* Initial collapsed height */
+}
+
+/* Hover state for the version badge */
+.version-badge:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+    transform: translateY(-2px); /* Slight upward movement on hover */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    max-height: 100px; /* Expanded height on hover */
+}
+
+/* Style for the main version info (always visible) */
+.version-badge .version-info {
+    display: inline-block;
+}
+
+/* Container for additional version details (hidden by default) */
+.version-badge .version-details {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+    margin-top: 0;
+    font-size: 10px;
+}
+
+/* Show version details on hover */
+.version-badge:hover .version-details {
+    max-height: 100px;
+    opacity: 1;
+    margin-top: 5px;
+}
+
+/* Style for the environment text */
+.version-badge .environment {
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+/* Color-coding based on version recency */
+.version-badge.recent {
+    background-color: rgba(76, 175, 80, 0.8); /* Green for recent versions */
+}
+
+.version-badge.moderate {
+    background-color: rgba(255, 193, 7, 0.8); /* Yellow for moderately recent versions */
+}
+
+.version-badge.old {
+    background-color: rgba(255, 87, 34, 0.8); /* Red for older versions */
+}

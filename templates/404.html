@@ -2,15 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Error</title>
+    <title>404 Not Found</title>
     <!-- Lottie animation library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.7.14/lottie.min.js"></script>
-    <!-- Global CSS file -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
     <style>
         /*
-         * Styles for the error page
-         * Using a dark theme with red accents for errors
+         * Styles for the 404 page
+         * Using a dark theme with orange accents
          */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -32,17 +30,10 @@
             width: 90%;
             text-align: center;
             padding: 40px;
-            transition: all 0.3s ease;
-        }
-
-        #lottie-container {
-            width: 200px;
-            height: 200px;
-            margin: 0 auto 20px;
         }
 
         h1 {
-            color: #ff6666;
+            color: #ff8c00;
             margin-bottom: 20px;
         }
 
@@ -52,7 +43,7 @@
         }
 
         .back-button {
-            background-color: #007bff;
+            background-color: #ff8c00;
             color: #ffffff;
             border: none;
             padding: 10px 20px;
@@ -64,31 +55,34 @@
         }
 
         .back-button:hover {
-            background-color: #0056b3;
+            background-color: #e67e00;
+        }
+
+        #lottie-container {
+            width: 300px;
+            height: 300px;
+            margin: 0 auto 20px;
         }
     </style>
 </head>
 <body>
 <div class="container">
+    <h1>404 - Page Not Found</h1>
+    <!-- Container for Lottie animation -->
     <div id="lottie-container"></div>
-    <h1>Oops! An Error Occurred </h1>
-    <!-- Dynamic error title, with a default message if not provided -->
-    <p>{{ error_title|default('It seems something went wrong') }}</p>
-    <!-- Specific error message -->
-    <p>{{ error_message }}</p>
+    <p>Oops! The page you're looking for doesn't exist.</p>
     <!-- Back button using Flask's url_for function -->
-    <a href="{{ url_for('index') }}" class="back-button">Let's try again</a>
+    <a href="{{ url_for('index') }}" class="back-button">Go Back Home</a>
 </div>
 <script>
-        var animation = lottie.loadAnimation({
-            container: document.getElementById('lottie-container'),
-            renderer: 'svg',
-            loop: false,
-            autoplay: true,
-            path: 'https://lottie.host/e46ce4b1-a341-432f-ad3f-70c50ebc9fd0/8ZtkkE9M1d.json'
-        });
+    // Initialize Lottie animation
+    var animation = lottie.loadAnimation({
+        container: document.getElementById('lottie-container'),
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        path: 'https://lottie.host/6538231f-1f74-4cf6-84db-9f876c365a58/04TXBlmuIh.json'
+    });
 </script>
-<!-- Include the version badge component -->
-{% include 'version_badge.html' %}
 </body>
 </html>

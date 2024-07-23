@@ -1,26 +1,41 @@
-#version: '3.8'
+# Docker Compose configuration for AION License Count application
+
+#version: '3.8' # Uncomment and set the version if needed
 
 services:
+  # Web service configuration
   web:
     build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - .:/app
-      - ./logs:/app/logs
-    expose:
-      - "5000"
-    environment:
-      FLASK_ENV: development
+      context: . # Build context is the current directory
+      dockerfile: Dockerfile # Use the Dockerfile in the current directory
+      args:
+        # Pass build arguments to the Dockerfile
+        # Use environment variables or default to 'unknown'
+        VERSION: ${VERSION:-unknown}
+        BRANCH: ${BRANCH:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+        BUILD: ${BUILD:-unknown}
+        DEPLOY_ENV: ${DEPLOY_ENV:-unknown}
 
+
+    volumes:
+      - .:/app # Mount the current directory to /app in the container
+      - ./logs:/app/logs # Mount the logs directory to /app/logs in the container
+    expose:
+      - "5000" # Expose port 5000 (internal to Docker network)
+    environment:
+      FLASK_ENV: development # Set Flask environment to development
+      LOG_DIR: /app/logs # Set log directory to /app/logs
+
+  # Nginx service configuration
   nginx:
     build:
-      context: .
-      dockerfile: Dockerfile.nginx
+      context: . # Build context is the current directory
+      dockerfile: Dockerfile.nginx # Use the Dockerfile.nginx file
     ports:
-      - "80:80"
-      - "443:443"
+      - "80:80" # Map host port 80 to container port 80
+      - "443:443" # Map host port 443 to container port 443 (for HTTPS)
     depends_on:
-      - web
+      - web # Ensure the web service is started before nginx
     volumes:
-      - .:/app
+      - .:/app # Mount the current directory to /app in the container
