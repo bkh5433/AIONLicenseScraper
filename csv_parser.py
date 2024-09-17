@@ -154,7 +154,7 @@ def create_license_counts_df(license_counts):
 
 
 def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df, unaccounted_users,
-                  cost_per_user, cost_per_exchange):
+                  cost_per_user, cost_per_exchange, cost_per_teams):
     """
        Save the processed data to an Excel file with specific formatting.
 
@@ -167,6 +167,7 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
            unaccounted_users (pandas.DataFrame): DataFrame with unaccounted users' data.
            cost_per_user (int): Cost per user.
            cost_per_exchange (int): Cost per exchange license.
+           cost_per_teams (int): Cost per Teams license.
        """
     try:
         logger.info(f"writing data to Excel file: {excel_path}")
@@ -211,14 +212,17 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
             # Set currency format for cost columns
             user_cost_col = 'Cost of Users (${})'.format(cost_per_user)
             exchange_cost_col = 'Cost of Exchange Licenses (${})'.format(cost_per_exchange)
+            teams_cost_col = 'Cost of Teams Licenses (${})'.format(cost_per_teams)
             billable_total_col = 'Billable Total'
 
             user_cost_idx = license_counts_df.columns.get_loc(user_cost_col) + 1
             exchange_cost_idx = license_counts_df.columns.get_loc(exchange_cost_col) + 1
+            teams_cost_idx = license_counts_df.columns.get_loc(teams_cost_col) + 1
             billable_total_idx = license_counts_df.columns.get_loc(billable_total_col) + 1
 
             license_counts_worksheet.set_column(user_cost_idx, user_cost_idx, 15, currency_format)
             license_counts_worksheet.set_column(exchange_cost_idx, exchange_cost_idx, 15, currency_format)
+            license_counts_worksheet.set_column(teams_cost_idx, teams_cost_idx, 15, currency_format)
             license_counts_worksheet.set_column(billable_total_idx, billable_total_idx, 15, currency_format)
 
             aion_management_worksheet = writer.sheets['AION Management']
@@ -239,7 +243,7 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
         logger.error(f"Error writing to Excel file {excel_path}: {e}")
 
 
-def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
+def process_file(file_path, cost_per_user=115, cost_per_exchange=20, cost_per_teams=4):
     """
         Main function to process the CSV file and generate the Excel report.
 
@@ -247,6 +251,7 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
             file_path (str): Path to the input CSV file.
             cost_per_user (int, optional): Cost per user. Defaults to 115.
             cost_per_exchange (int, optional): Cost per exchange license. Defaults to 20.
+            cost_per_teams (int, optional): Cost per Teams license. Defaults to 4.
 
         Returns:
             str or None: Path to the generated Excel file if successful, None otherwise.
@@ -259,7 +264,8 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
 
     target_licenses = {
         '365 Premium': ['Microsoft 365 Business Premium', 'E3'],
-        'Exchange': ['Exchange']
+        'Exchange': ['Exchange'],
+        'Teams': ['Microsoft Teams Enterprise']
     }
 
     license_counts = initialize_license_counts(df, target_licenses)
@@ -274,8 +280,13 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
     license_counts_df['Cost of Users (${})'.format(cost_per_user)] = license_counts_df['365 Premium'] * cost_per_user
     license_counts_df['Cost of Exchange Licenses (${})'.format(cost_per_exchange)] = license_counts_df[
                                                                                          'Exchange'] * cost_per_exchange
-    license_counts_df['Billable Total'] = license_counts_df['Cost of Users (${})'.format(cost_per_user)] + \
-                                          license_counts_df['Cost of Exchange Licenses (${})'.format(cost_per_exchange)]
+    license_counts_df['Cost of Teams Licenses (${})'.format(cost_per_teams)] = license_counts_df[
+                                                                                   'Teams'] * cost_per_teams
+    license_counts_df['Billable Total'] = (
+            license_counts_df['Cost of Users (${})'.format(cost_per_user)] +
+            license_counts_df['Cost of Exchange Licenses (${})'.format(cost_per_exchange)] +
+            license_counts_df['Cost of Teams Licenses (${})'.format(cost_per_teams)]
+    )
 
     aion_management_df = pd.DataFrame(aion_management, columns=['Display Name', 'License Type', 'User Principal Name'])
     aion_partners_df = pd.DataFrame(aion_partners, columns=['Display Name', 'License Type', 'User Principal Name'])
@@ -291,7 +302,7 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
 
     save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partners_df, properties_df, unaccounted_users,
                   cost_per_user,
-                  cost_per_exchange)
+                  cost_per_exchange, cost_per_teams)
     logger.info(f"Processed file saved to: {excel_path}")
 
     try:
@@ -326,58 +337,37 @@ def generate_summary(file_path):
         for i in range(2, total_row)  # Skip header row
     ]
 
+    # TODO: ADD DOCSTRING
     summary = {
-        # Total number of 365 Premium licenses
         'total_365_premium': sum(row[1] for row in data),
-
-        # Total number of Exchange licenses
         'total_exchange': sum(row[2] for row in data),
-
-        # Total cost across all offices
-        'total_cost': sum(row[5] for row in data),
-
-        # Average cost per office
-        'avg_cost_per_office': sum(row[5] for row in data) / len(data),
-
-        # Highest cost among all offices
-        'highest_cost': max(row[5] for row in data),
-
-        # Name of the office with the highest cost
-        'highest_cost_office': next(row[0] for row in data if row[5] == max(r[5] for r in data)),
-
-        # Percentage of offices with both 365 Premium and Exchange licenses
+        'total_teams': sum(row[3] for row in data),
+        'total_cost': sum(row[7] for row in data),  # Adjust index based on new column order
+        'avg_cost_per_office': sum(row[7] for row in data) / len(data),
+        'highest_cost': max(row[7] for row in data),
+        'highest_cost_office': next(row[0] for row in data if row[7] == max(r[7] for r in data)),
         'percent_both_licenses': sum(1 for row in data if row[1] > 0 and row[2] > 0) / len(data) * 100,
-
-        # Percentage of offices with only 365 Premium licenses
-        'percent_only_365': sum(1 for row in data if row[1] > 0 and row[2] == 0) / len(data) * 100,
-
-        # Percentage of offices with only Exchange licenses
-        'percent_only_exchange': sum(1 for row in data if row[1] == 0 and row[2] > 0) / len(data) * 100,
-
-        # Highest ratio of Exchange to 365 Premium licenses
+        'percent_only_365': sum(1 for row in data if row[1] > 0 and row[2] == 0 and row[3] == 0) / len(data) * 100,
+        'percent_only_exchange': sum(1 for row in data if row[1] == 0 and row[2] > 0 and row[3] == 0) / len(data) * 100,
+        'percent_only_teams': sum(1 for row in data if row[1] == 0 and row[2] == 0 and row[3] > 0) / len(data) * 100,
         'highest_exchange_ratio': max((row[2] / row[1] if row[1] > 0 else 0) for row in data),
-
-        # Name of the office with the highest Exchange to 365 Premium ratio
         'highest_exchange_ratio_office': next(row[0] for row in data if (row[2] / row[1] if row[1] > 0 else 0) == max(
             (r[2] / r[1] if r[1] > 0 else 0) for r in data)),
-
-        # Number of offices with no licenses
-        'offices_no_licenses': sum(1 for row in data if row[1] == 0 and row[2] == 0),
-
-        # Average number of licenses (both types) per office
-        'avg_licenses_per_office': (sum(row[1] for row in data) + sum(row[2] for row in data)) / len(data),
-
-        # Top 5 offices by cost, sorted in descending order
+        'highest_teams_ratio': max((row[3] / (row[1] + row[2]) if (row[1] + row[2]) > 0 else 0) for row in data),
+        'highest_teams_ratio_office': next(row[0] for row in data if
+                                           (row[3] / (row[1] + row[2]) if (row[1] + row[2]) > 0 else 0) == max(
+                                               (r[3] / (r[1] + r[2]) if (r[1] + r[2]) > 0 else 0) for r in data)),
+        'offices_no_licenses': sum(1 for row in data if row[1] == 0 and row[2] == 0 and row[3] == 0),
+        'avg_licenses_per_office': (sum(row[1] for row in data) + sum(row[2] for row in data) + sum(
+            row[3] for row in data)) / len(data),
         'top_offices_by_cost': sorted(
-            [(row[0], row[3], row[4], row[5]) for row in data],
-            key=lambda x: x[3],
+            [(row[0], row[4], row[5], row[6], row[7]) for row in data],
+            key=lambda x: x[4],
             reverse=True
         )[:5],
-
-        # Top 5 offices by total number of licenses, sorted in descending order
         'top_offices_by_license': sorted(
-            [(row[0], row[1], row[2], row[1] + row[2]) for row in data],
-            key=lambda x: x[3],
+            [(row[0], row[1], row[2], row[3], row[1] + row[2] + row[3]) for row in data],
+            key=lambda x: x[4],
             reverse=True
         )[:5],
     }
