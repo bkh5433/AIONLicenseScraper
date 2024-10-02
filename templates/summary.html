@@ -170,6 +170,7 @@
             <h3>Total Licenses</h3>
             <p>365 Premium: {{ summary.total_365_premium }}</p>
             <p>Exchange: {{ summary.total_exchange }}</p>
+            <p>Teams: {{ summary.total_teams }}</p>
 
         </div>
         <div class="summary-item">
@@ -183,6 +184,7 @@
             <p>Both Types: {{ '{:.1f}%'.format(summary.percent_both_licenses) }}</p>
             <p>Only 365 Premium: {{ '{:.1f}%'.format(summary.percent_only_365) }}</p>
             <p>Only Exchange: {{ '{:.1f}%'.format(summary.percent_only_exchange) }}</p>
+            <p>Only Teams: {{ '{:.1f}%'.format(summary.percent_only_teams) }}</p>
         </div>
     </div>
 
@@ -200,6 +202,8 @@
         <h3>Noteworthy Data</h3>
         <p>Highest Exchange to 365 Ratio: {{ summary.highest_exchange_ratio_office }}
             ({{ '{:.2f}'.format(summary.highest_exchange_ratio) }}:1)</p>
+        <p>Highest Teams to Other Licenses Ratio: {{ summary.highest_teams_ratio_office }}
+            ({{ '{:.2f}'.format(summary.highest_teams_ratio) }}:1)</p>
         <p>Offices with No Licenses: {{ summary.offices_no_licenses }}</p>
         <p>Avg Licenses per Office: {{ '{:.2f}'.format(summary.avg_licenses_per_office) }}</p>
     </div>

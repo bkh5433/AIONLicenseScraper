@@ -26,6 +26,7 @@ services:
     environment:
       FLASK_ENV: development # Set Flask environment to development
       LOG_DIR: /app/logs # Set log directory to /app/logs
+    restart: always # Restart the container if it stops
 
   # Nginx service configuration
   nginx:
@@ -39,3 +40,4 @@ services:
       - web # Ensure the web service is started before nginx
     volumes:
       - .:/app # Mount the current directory to /app in the container
+    restart: always # Restart the container if it stops

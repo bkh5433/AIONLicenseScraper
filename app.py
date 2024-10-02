@@ -5,7 +5,7 @@ This module sets up the Flask application, defines routes, and handles
 file uploads, processing, and downloads.
 """
 
-from flask import render_template, request, redirect, url_for, session, Response
+from flask import render_template, request, redirect, url_for, session, Response, g, after_this_request
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from flask.json import jsonify
 from csv_parser import process_file, generate_summary
@@ -262,22 +262,25 @@ def download_file(filename):
 
         friendly_filename = session.get('friendly_filename', filename)
 
+        # Store necessary session data before the request context is torn down
+        session.pop('pending_file_id', None)
+        session.pop('friendly_filename', None)
+        logger.info(f"Cleared session data for: {filename}")
+
         def generate():
             with open(file_path, 'rb') as f:
                 yield from f
 
-            # Cleanup after file has been sent
+        def cleanup():
             try:
                 os.remove(file_path)
                 logger.info(f"Removed downloaded file: {filename}")
-                session.pop('pending_file_id', None)
-                session.pop('friendly_filename', None)
-                logger.info(f"Cleared session data for: {filename}")
             except Exception as e:
                 logger.error(f"Error in cleanup after download for {filename}: {e}")
 
         response = Response(generate(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response.headers["Content-Disposition"] = f"attachment; filename={friendly_filename}"
+        response.call_on_close(cleanup)
         return response
 
     except Exception as e:
@@ -367,7 +370,6 @@ def api_login_required(f):
     return decorated_function
 
 
-# TODO: Uncomment the following route to enable the logs API
 @app.route('/api/logs', methods=['GET'])
 @api_login_required
 def get_logs():
@@ -496,15 +498,9 @@ def handle_exception(e):
     # Return an error page with the exception message
     return render_template('error.html', error_message=str(e)), 500
 
-
-@app.route('/test-exception')
-def test_exception():
-    logger = get_logger(__name__)
-    try:
-        raise ValueError("This is a test exception")
-    except Exception as e:
-        logger.exception("An error occurred in the test route")
-        raise
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "healthy"}), 200
 
 
 if __name__ == '__main__':
