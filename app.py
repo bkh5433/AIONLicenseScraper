@@ -498,16 +498,6 @@ def handle_exception(e):
     # Return an error page with the exception message
     return render_template('error.html', error_message=str(e)), 500
 
-
-# @app.route('/test-exception')
-# def test_exception():
-#     logger = get_logger(__name__)
-#     try:
-#         raise ValueError("This is a test exception")
-#     except Exception as e:
-#         logger.exception("An error occurred in the test route")
-#         raise
-
 @app.route('/health')
 def health_check():
     return jsonify({"status": "healthy"}), 200
