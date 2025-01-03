@@ -267,6 +267,252 @@ Contributions are welcome! Please fork the repository and create a pull request 
 
 This project is licensed under the [MIT License](LICENSE).
 
+## Security Measures
+
+Ensuring the security of file uploads and data handling is paramount for the AION Microsoft License Counter application.
+The application implements several security measures within `app.py` and `csv_parser.py` to safeguard against common
+vulnerabilities.
+
+### Security Measures in `app.py`
+
+#### 1. **Authentication and Authorization**
+
+- **Flask-Login Integration**:
+    - **Implementation**: Utilizes `Flask-Login` to manage user sessions, ensuring that only authenticated users can
+      access certain routes like the admin center.
+    - **Benefit**: Prevents unauthorized access to sensitive parts of the application.
+
+  ```python
+  from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+  ```
+
+- **User Loader Function**:
+    - **Implementation**: Defines a `user_loader` callback to load user information from the database.
+    - **Benefit**: Ensures that only valid users can be authenticated and maintain active sessions.
+
+  ```python
+  @login_manager.user_loader
+  def load_user(user_id):
+      user_doc = db().collection('users').document(user_id).get()
+      if user_doc.exists:
+          return User(user_id)
+      return None
+  ```
+
+#### 2. **File Upload Restrictions**
+
+- **Allowed File Extensions**:
+    - **Implementation**: The `allowed_file` function restricts uploads to only `.csv` files.
+    - **Benefit**: Minimizes the risk of malicious files being uploaded and executed on the server.
+
+  ```python
+  def allowed_file(filename):
+      return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+  ```
+
+#### 3. **Input Validation**
+
+- **CSV File Validation**:
+    - **Implementation**: Utilizes the `validate_csv` function to ensure that the uploaded CSV meets expected criteria
+      before processing.
+    - **Benefit**: Prevents malformed or malicious CSV data from being processed, which could lead to security breaches
+      or application crashes.
+
+  ```python
+  is_valid, error_message = validate_csv(file_path)
+  if not is_valid:
+      invalid_path = os.path.join(app.config['INVALID_FOLDER'], file.filename)
+      os.rename(file_path, invalid_path)
+      logger.error(f"File validation failed: {file.filename} - {error_message}")
+      return render_template('error.html',
+                             error_title='Invalid CSV File',
+                             error_message=error_message)
+  ```
+
+#### 4. **Secure Session Management**
+
+- **Secret Key Handling**:
+    - **Implementation**: The application fetches a secret key from `version.json` or generates a secure random key if
+      not available.
+    - **Benefit**: Ensures that session data is securely signed to prevent tampering.
+
+  ```python
+  try:
+      with open('version.json', 'r') as f:
+          version_info = json.load(f)
+      app.secret_key = version_info.get('secret_key') or os.urandom(24).hex()
+  except (FileNotFoundError, json.JSONDecodeError):
+      app.secret_key = os.urandom(24).hex()
+  ```
+
+#### 5. **Error Handling and Logging**
+
+- **Custom Error Handlers**:
+    - **Implementation**: Defines custom handlers for specific HTTP errors like 404 and general exceptions.
+    - **Benefit**: Provides controlled feedback to users without exposing sensitive stack traces or server information.
+
+  ```python
+  @app.errorhandler(404)
+  def page_not_found(e):
+      logger.warning(f"Page not found {e}")
+      return render_template('404.html'), 404
+  ```
+
+- **Comprehensive Logging**:
+    - **Implementation**: Logs essential events, errors, and request lifecycle stages to monitor and debug the
+      application effectively.
+    - **Benefit**: Helps in identifying and responding to security incidents promptly.
+
+  ```python
+  @app.before_request
+  def log_request_start():
+      logger.info(f"Start processing request: {request.method} {request.path}")
+
+  @app.after_request
+  def log_request_end(response):
+      logger.info(f"End processing request: {request.method} {request.path} with status {response.status}")
+      return response
+  ```
+
+#### 6. **Secure Data Handling**
+
+- **Session Management**:
+    - **Implementation**: Uses server-side sessions to manage user states securely.
+    - **Benefit**: Reduces the risk of client-side manipulation of session data.
+
+  ```python
+  from flask import session
+  ```
+
+#### 7. **HTTPS Enforcement**
+
+- **Nginx Configuration for SSL**:
+    - **Implementation**: The Nginx server is configured to redirect HTTP traffic to HTTPS and handle SSL termination.
+    - **Benefit**: Encrypts data in transit, protecting sensitive information from eavesdropping and man-in-the-middle
+      attacks.
+
+  ```nginx
+  # Redirect all HTTP requests to HTTPS
+  server {
+      listen 80;
+      server_name localhost;
+
+      return 301 https://$server_name$request_uri;
+  }
+
+  # HTTPS Server Block
+  server {
+      listen 443 ssl;
+      server_name localhost;
+
+      ssl_certificate /etc/nginx/ssl/selfsigned.crt;
+      ssl_certificate_key /etc/nginx/ssl/selfsigned.key;
+      
+      # ... additional SSL settings ...
+  }
+  ```
+
+### Security Measures in `csv_parser.py`
+
+#### 1. **Input Sanitization and Validation**
+
+- **Reading and Cleaning Data**:
+    - **Implementation**: Strips whitespaces and ensures necessary columns are present before processing.
+    - **Benefit**: Prevents injection attacks and ensures that the data conforms to expected formats.
+
+  ```python
+  def read_and_prepare_data(file_path):
+      try:
+          df = pd.read_csv(file_path)
+          df['Office'] = df['Office'].str.strip()
+          logger.info(f"csv cleaned successfully from {file_path}")
+          return df
+      except FileNotFoundError:
+          logger.error(f"File not found: {file_path}")
+          return None
+      except pd.errors.EmptyDataError:
+          logger.error(f"No data: {file_path} is empty")
+          return None
+      except Exception as e:
+          logger.error(f"Error reading file {file_path}: {e}")
+          return None
+  ```
+
+#### 2. **Secure File Handling**
+
+- **Temporary File Management**:
+    - **Implementation**: Processes files in designated directories and removes them after processing.
+    - **Benefit**: Minimizes the risk of leftover temporary files that could be exploited.
+
+  ```python
+  def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
+      # ... processing logic ...
+      try:
+          os.remove(file_path)
+          logger.info(f"Removed uploaded file: {file_path}")
+      except OSError as e:
+          logger.error(f"Error removing uploaded {file_path}: {e}")
+  ```
+
+#### 3. **Exception Handling**
+
+- **Robust Error Handling**:
+    - **Implementation**: Catches and logs specific exceptions like `PermissionError` and general exceptions during file
+      processing and saving.
+    - **Benefit**: Prevents the application from crashing due to unexpected errors and ensures that issues are logged
+      for further investigation.
+
+  ```python
+  def save_to_excel(...):
+      try:
+          # ... saving logic ...
+          logger.info(f"Data saved to Excel file: {excel_path}")
+      except PermissionError:
+          logger.error(f"Permission denied when writing to {excel_path}")
+      except Exception as e:
+          logger.error(f"Error writing to Excel file {excel_path}: {e}")
+  ```
+
+#### 4. **Resource Management**
+
+- **Optimized Data Processing**:
+    - **Implementation**: Utilizes pandas and openpyxl efficiently to handle large datasets.
+    - **Benefit**: Reduces the risk of resource exhaustion attacks by ensuring that data is processed optimally.
+
+#### 5. **Unique File Naming**
+
+- **UUID for File Identification**:
+    - **Implementation**: Generates unique filenames using UUIDs to prevent filename collisions and directory traversal
+      attacks.
+    - **Benefit**: Ensures that each processed file has a unique identifier, mitigating risks associated with
+      predictable filenames.
+
+  ```python
+  def process_file(file_path, cost_per_user=115, cost_per_exchange=20):
+      # ... processing logic ...
+      file_id = str(uuid.uuid4())
+      internal_filename = f"{file_id}_license_counts_{current_date}.xlsx"
+  ```
+
+#### 6. **Data Integrity Checks**
+
+- **Validation Before Processing**:
+    - **Implementation**: Ensures that the CSV contains the necessary columns and that data types are correct before
+      proceeding.
+    - **Benefit**: Maintains data integrity and prevents errors during report generation.
+
+#### 7. **Logging and Monitoring**
+
+- **Comprehensive Logging**:
+    - **Implementation**: Logs every significant step of the CSV processing pipeline, including successes and failures.
+    - **Benefit**: Facilitates monitoring and quick identification of potential security issues or data inconsistencies.
+
+  ```python
+  def process_file(...):
+      logger.info(f"Processing file: {file_path}")
+      # ... processing steps ...
+      logger.info(f"Processed file saved to: {excel_path}")
+  ```
 
 
     
