@@ -17,7 +17,6 @@ services:
         BUILD: ${BUILD:-unknown}
         DEPLOY_ENV: ${DEPLOY_ENV:-unknown}
 
-
     volumes:
       - .:/app # Mount the current directory to /app in the container
       - ./logs:/app/logs # Mount the logs directory to /app/logs in the container
