@@ -55,7 +55,8 @@ def test_process_licenses(sample_csv):
     df = read_and_prepare_data(sample_csv)
     target_licenses = {
         '365 Premium': ['Microsoft 365 Business Premium', 'Microsoft 365 E3', 'Microsoft 365 E5'],
-        'Exchange': ['Exchange Online (Plan 1)', 'Exchange Online (Plan 2)']
+        'Exchange': ['Exchange Online (Plan 1)', 'Exchange Online (Plan 2)'],
+        'Teams': ['Microsoft Teams Enterprise']
     }
     license_counts = initialize_license_counts(df, target_licenses)
     result = process_licenses(df, target_licenses, license_counts)
