@@ -25,6 +25,8 @@ from firebase_config import initialize_firestore as db
 import os
 import json
 import time
+from urllib.parse import urlparse, urljoin
+from werkzeug.utils import secure_filename
 
 setup_logging()
 logger = get_logger(__name__)
@@ -169,6 +171,30 @@ def index():
     return render_template('upload.html')
 
 
+def is_safe_url(target):
+    """
+    Validate URL to prevent open redirects.
+    """
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
+
+
+def get_safe_path(base_dir, filename):
+    """
+    Create a safe path that prevents directory traversal.
+    """
+    filename = secure_filename(filename)
+    try:
+        safe_path = os.path.abspath(os.path.join(base_dir, filename))
+        if not safe_path.startswith(os.path.abspath(base_dir)):
+            raise ValueError("Path traversal detected")
+        return safe_path
+    except Exception as e:
+        logger.error(f"Path sanitization failed: {e}")
+        raise ValueError("Invalid path")
+
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """
@@ -199,9 +225,16 @@ def upload_file():
                                    error_message="Please choose a file before uploading.")
 
         if file and allowed_file(file.filename):
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            filename = secure_filename(file.filename)
+            try:
+                file_path = get_safe_path(app.config['UPLOAD_FOLDER'], filename)
+            except ValueError as e:
+                return render_template('error.html',
+                                       error_title='Invalid File Path',
+                                       error_message=str(e))
+
             file.save(file_path)
-            logger.info(f"File uploaded: {file.filename}")
+            logger.info(f"File uploaded: {filename}")
 
             is_valid, error_message = validate_csv(file_path)
             if not is_valid:
@@ -254,7 +287,12 @@ def download_file(filename):
         flask.Response: The file download response or an error page.
     """
     try:
-        file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
+        try:
+            file_path = get_safe_path(app.config['OUTPUT_FOLDER'], filename)
+        except ValueError as e:
+            return render_template('error.html',
+                                   error_message=f"Invalid file path: {str(e)}")
+
         if not os.path.exists(file_path):
             logger.error(f"File not found: {filename}")
             return render_template('error.html',

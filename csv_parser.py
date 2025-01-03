@@ -36,8 +36,32 @@ import uuid
 from datetime import datetime
 from utils.logger import get_logger
 from create_app import app
+import os.path
+from pathlib import Path
 
 logger = get_logger(__name__)
+
+
+def sanitize_path(base_path, filename):
+    """
+    Sanitize a file path to prevent path traversal attacks.
+    
+    Args:
+        base_path (str): The base directory path
+        filename (str): The filename to sanitize
+        
+    Returns:
+        str: A sanitized absolute path that is guaranteed to be under base_path
+    """
+    base_path = os.path.abspath(base_path)
+    try:
+        full_path = os.path.abspath(os.path.join(base_path, filename))
+        if not full_path.startswith(base_path):
+            raise ValueError("Path traversal detected")
+        return full_path
+    except Exception as e:
+        logger.error(f"Path sanitization failed: {e}")
+        raise ValueError("Invalid path")
 
 
 def read_and_prepare_data(file_path):
@@ -171,6 +195,10 @@ def save_to_excel(excel_path, license_counts_df, aion_management_df, aion_partne
            cost_per_teams (int): Cost per Teams license.
        """
     try:
+        # Sanitize output path
+        base_dir = os.path.dirname(os.path.abspath(excel_path))
+        excel_path = sanitize_path(base_dir, os.path.basename(excel_path))
+        
         logger.info(f"writing data to Excel file: {excel_path}")
         with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
             license_counts_df.to_excel(writer, sheet_name='License Counts')
@@ -263,6 +291,15 @@ def process_file(file_path, cost_per_user=115, cost_per_exchange=20, cost_per_e5
         """
     logger.info(f"Processing file: {file_path}")
     start_time = time.time()
+
+    # Sanitize input path
+    try:
+        base_dir = os.path.dirname(os.path.abspath(file_path))
+        file_path = sanitize_path(base_dir, os.path.basename(file_path))
+    except ValueError as e:
+        logger.error(f"Invalid file path: {e}")
+        return None
+
     df = read_and_prepare_data(file_path)
     if df is None:
         return None

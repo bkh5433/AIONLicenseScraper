@@ -2,7 +2,7 @@
 # This Dockerfile sets up an Nginx reverse proxy for the AION License Count application
 
 # Use the official Nginx image from the Docker Hub
-FROM nginx:alpine
+FROM --platform=linux/arm64 nginx:alpine
 
 # Copy the custom Nginx configuration file
 # This file should contain the necessary settings to proxy requests to the Flask application
